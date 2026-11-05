@@ -5,7 +5,7 @@ services:
       dockerfile: entorno/Dockerfile
       args:
         PYTHON_VERSION: "3.11"
-    container_name: tc_p1_py311
+    container_name: tc_p2_py311
     volumes:
       - ../:/app
     command: pytest -q
