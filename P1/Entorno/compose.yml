@@ -2,7 +2,7 @@ services:
   py311:
     build:
       context: ..
-      dockerfile: P1/Entorno/Dockerfile
+      dockerfile: Entorno/Dockerfile
       args:
         PYTHON_VERSION: "3.11"
     container_name: tc_p1_py311
@@ -13,7 +13,7 @@ services:
   py312:
     build:
       context: ..
-      dockerfile: P1/Entorno/Dockerfile
+      dockerfile: Entorno/Dockerfile
       args:
         PYTHON_VERSION: "3.12"
     container_name: tc_p1_py312
@@ -25,7 +25,7 @@ services:
   py313:
     build:
       context: ..
-      dockerfile: P1/Entorno/Dockerfile
+      dockerfile: Entorno/Dockerfile
       args:
         PYTHON_VERSION: "3.13"
     container_name: tc_p1_py313
