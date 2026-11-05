@@ -7,7 +7,7 @@ services:
         PYTHON_VERSION: "3.11"
     container_name: tc_p2_py311
     volumes:
-      - ../:/app
+        -../:/app
     command: pytest -q
 
   py312:
@@ -20,7 +20,7 @@ services:
     ports:
       - "8550:8550"
     volumes:
-      - ../:/app
+       -../:/app
 
   py313:
     build:
@@ -30,5 +30,5 @@ services:
         PYTHON_VERSION: "3.13"
     container_name: tc_p2_py313
     volumes:
-      - ../:/app
+      -../:/app
     command: pytest -q
