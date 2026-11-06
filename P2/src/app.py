@@ -10,7 +10,7 @@ from eliminacion_lambda import EliminadorLambda
 from afn_a_afd import ConvertidorSubconjuntos
 from minimizacion_afd import MinimizadorAFD
 from validador_lote import ValidadorLote
-
+from eliminacion_estados import ConversorAutomataARegex
 # Importaciones de la Práctica 4 (Ejercicio 2)
 from regex_parser import RegexParser, RegexSyntaxError
 from thompson import ConstructorThompson
@@ -1119,12 +1119,83 @@ def main(page: ft.Page):
         ),
     )
 
+    txt_status_ej3 = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
+    txt_resultado_regex_final = ft.Text("", size=16, weight=ft.FontWeight.BOLD, selectable=True)
+    txt_historial_eliminacion = ft.Text("", size=13, selectable=True, font_family="Consolas")
+
+    def ejecutar_conversion_a_regex(e):
+        if not automata_actual.estados:
+            txt_status_ej3.value = "⚠️ Primero carga o define un autómata en formato AFD."
+            txt_status_ej3.color = ft.colors.ORANGE_400
+            page.update()
+            return
+
+        es_puro, mensaje_verificacion = ConversorAutomataARegex.verificar_es_afd_puro(automata_actual)
+        if not es_puro:
+            txt_status_ej3.value = f"❌ El autómata no es un AFD determinista puro:\n  • {mensaje_verificacion}"
+            txt_status_ej3.color = ft.colors.RED_400
+            txt_resultado_regex_final.value = ""
+            txt_historial_eliminacion.value = ""
+            page.update()
+            return
+
+        try:
+            regex_final, historial = ConversorAutomataARegex.convertir_a_regex(automata_actual)
+
+            txt_status_ej3.value = f"✅ Verificación exitosa: {mensaje_verificacion}"
+            txt_status_ej3.color = ft.colors.GREEN_400
+            txt_resultado_regex_final.value = f"Exito! Expresión Regular resultante:\n  R = {regex_final}"
+
+            lineas = ["=== HISTORIAL DE ELIMINACIÓN DE ESTADOS ==="]
+            for h in historial:
+                lineas.append(f"\nPaso {h['paso']}: Estado eliminado '{h['estado_eliminado']}'")
+                lineas.append("  Matriz de transiciones parcial:")
+                for u, destinos in h["matriz_antes"].items():
+                    for v, expr in destinos.items():
+                        if expr:
+                            lineas.append(f"    R[{u}][{v}] = {expr}")
+
+            txt_historial_eliminacion.value = "\n".join(lineas)
+
+        except Exception as err:
+            txt_status_ej3.value = f"❌ Error durante la conversión: {err}"
+            txt_status_ej3.color = ft.colors.RED_400
+
+        page.update()
+
+    tab_automata_a_regex = ft.Tab(
+        text="P4 Autómata → ER",
+        icon=ft.icons.TRANSFORM,
+        content=ft.Container(
+            padding=15,
+            content=ft.Column(
+                [
+                    ft.Text("P4 Ejercicio 3: De Autómata a Expresión Regular", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Text("Importa un AFD, verifica su determinismo y obtén la expresión regular por eliminación de estados."),
+                    ft.ElevatedButton(
+                        "Verificar y Obtener ER",
+                        icon=ft.icons.AUTO_FIX_HIGH,
+                        on_click=ejecutar_conversion_a_regex,
+                    ),
+                    txt_status_ej3,
+                    txt_resultado_regex_final,
+                    ft.Divider(),
+                    ft.Text("Desglose del Autómata Generalizado Paso a Paso:", size=16, weight=ft.FontWeight.BOLD),
+                    txt_historial_eliminacion,
+                ],
+                spacing=15,
+                scroll=ft.ScrollMode.AUTO,
+            ),
+        ),
+    )
+
     tabs = ft.Tabs(
         selected_index=1,
         animation_duration=300,
         tabs=[
             tab_definicion,
             tab_regex_thompson,
+            tab_automata_a_regex,  # <--- ¡Asegúrate de incluirla aquí en la lista!
             tab_archivos,
             tab_simulacion,
             tab_cerradura_lambda,
