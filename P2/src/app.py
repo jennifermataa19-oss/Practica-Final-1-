@@ -72,6 +72,7 @@ def main(page: ft.Page):
     # -------------------------------------------------------------------------
     # FUNCIONES AUXILIARES DE ACTUALIZACIÓN
     # -------------------------------------------------------------------------
+    
     def actualizar_vistas_definicion():
         """Actualiza la tabla de transiciones, la definición formal y controles."""
         # Detectamos el atributo de estados finales/aceptación
@@ -118,7 +119,8 @@ def main(page: ft.Page):
             celdas.append(ft.DataCell(ft.Text(f"{prefix}{est}")))
 
             for simbolo in alfabeto_ordenado:
-                destinos = automata_actual.transiciones.get(est, {}).get(simbolo, set())
+                # Búsqueda usando la tupla (est, simbolo) que usa tu clase Automata
+                destinos = automata_actual.transiciones.get((est, simbolo), set())
                 destinos_str = (
                     "{" + ", ".join(sorted(destinos)) + "}" if destinos else "∅"
                 )
