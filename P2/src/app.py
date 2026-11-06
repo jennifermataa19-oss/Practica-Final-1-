@@ -7,6 +7,7 @@ from exporter import AutomataExporter
 from operaciones import OperacionesLenguaje
 from cerradura_lambda import CerraduraLambdaSimulador
 from eliminacion_lambda import EliminadorLambda
+from afn_a_afd import ConvertidorSubconjuntos
 
 
 def formatear_conjunto(conjunto):
@@ -24,9 +25,10 @@ def main(page: ft.Page):
     UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # Autómata activo en la sesión
+    # Autómatas activos en la sesión
     automata_actual = Automata()
     automata_sin_lambda_convertido = None
+    afd_convertido = None
 
     # -------------------------------------------------------------------------
     # COMPONENTES DE INTERFAZ
@@ -78,7 +80,15 @@ def main(page: ft.Page):
         rows=[],
     )
 
-    # Pestaña 6: Operaciones sobre lenguajes
+    # Pestaña 6: Sección 2.3 - Conversión AFN a AFD (Subconjuntos)
+    txt_info_afd = ft.Text("", size=14, selectable=True)
+    txt_mapeo_subconjuntos = ft.Text("", size=13, selectable=True, font_family="Consolas")
+    data_table_afd = ft.DataTable(
+        columns=[ft.DataColumn(ft.Text("Estado AFD"))],
+        rows=[],
+    )
+
+    # Pestaña 7: Operaciones sobre lenguajes
     input_cadena_op1 = ft.TextField(label="Cadena 1", width=200)
     input_cadena_op2 = ft.TextField(label="Cadena 2", width=200)
     txt_resultado_operacion = ft.Text("", size=15, selectable=True)
@@ -112,7 +122,6 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # Definición formal (Q, Σ, q0, F)
         txt_definicion_formal.value = (
             "Definición Formal:\n"
             f"• Q = {formatear_conjunto(automata_actual.estados)}\n"
@@ -121,7 +130,6 @@ def main(page: ft.Page):
             f"• F = {formatear_conjunto(finales)}"
         )
 
-        # Tabla de transiciones
         alfabeto_ordenado = sorted(automata_actual.alfabeto)
         columnas = [ft.DataColumn(ft.Text("Estado"))] + [
             ft.DataColumn(ft.Text(simbolo)) for simbolo in alfabeto_ordenado
@@ -147,7 +155,6 @@ def main(page: ft.Page):
         data_table_transiciones.columns = columnas
         data_table_transiciones.rows = filas
 
-        # Dropdown de estados para la cerradura λ
         estados_ordenados = sorted(automata_actual.estados)
         dropdown_estado_cerradura.options = [
             ft.dropdown.Option(est) for est in estados_ordenados
@@ -158,7 +165,7 @@ def main(page: ft.Page):
         page.update()
 
     def limpiar_resultados():
-        """Limpia resultados de simulaciones previas al cargar un autómata nuevo."""
+        """Limpia resultados de simulaciones y conversiones previas."""
         list_pasos_simulacion.controls.clear()
         txt_resultado_simulacion.value = ""
         txt_resultado_cerradura.value = ""
@@ -166,12 +173,14 @@ def main(page: ft.Page):
         data_table_pasos_directos.rows = []
         txt_info_conversion_lambda.value = ""
         data_table_afn_sin_lambda.rows = []
+        txt_info_afd.value = ""
+        txt_mapeo_subconjuntos.value = ""
+        data_table_afd.rows = []
 
     # -------------------------------------------------------------------------
     # MANEJO DE ARCHIVOS (WEB UPLOADS)
     # -------------------------------------------------------------------------
     def resolver_ruta_archivo(nombre_archivo):
-        """Ubica el archivo subido dentro de la carpeta uploads o subdirectorios."""
         rutas_directas = [
             os.path.join(UPLOAD_DIR, nombre_archivo),
             os.path.join("/app", "uploads", nombre_archivo),
@@ -190,7 +199,6 @@ def main(page: ft.Page):
         return None
 
     def al_cargar_completado(e: ft.FilePickerUploadEvent):
-        """Se ejecuta cuando Flet confirma el progreso/final de la subida."""
         nonlocal automata_actual
 
         if e.error:
@@ -222,7 +230,6 @@ def main(page: ft.Page):
         page.update()
 
     def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
-        """Dispara la subida del archivo elegido (PUT, estándar de Flet Web)."""
         if not e.files:
             return
 
@@ -325,7 +332,6 @@ def main(page: ft.Page):
         page.update()
 
     def calcular_cerradura_individual(e):
-        """Calcula CL(estado) para el estado elegido (Sección 2.1)."""
         estado_sel = dropdown_estado_cerradura.value
         if not estado_sel:
             txt_resultado_cerradura.value = "⚠️ Selecciona un estado."
@@ -348,7 +354,6 @@ def main(page: ft.Page):
         page.update()
 
     def ejecutar_simulacion_directa(e):
-        """Simulación directa de AFN-λ sin convertir (Sección 2.1)."""
         data_table_pasos_directos.rows = []
         cadena = input_cadena_directa.value.strip() if input_cadena_directa.value else ""
 
@@ -393,7 +398,6 @@ def main(page: ft.Page):
         page.update()
 
     def ejecutar_eliminacion_lambda(e):
-        """Conversión de AFN-λ a AFN equivalente sin λ (Sección 2.2)."""
         nonlocal automata_sin_lambda_convertido
         data_table_afn_sin_lambda.rows = []
 
@@ -444,6 +448,67 @@ def main(page: ft.Page):
         except Exception as err:
             txt_info_conversion_lambda.value = f"❌ Error durante la conversión: {err}"
             txt_info_conversion_lambda.color = ft.colors.RED_400
+
+        page.update()
+
+    def ejecutar_conversion_afd(e):
+        """Conversión por algoritmo de subconjuntos (Sección 2.3)."""
+        nonlocal afd_convertido
+        data_table_afd.rows = []
+
+        if not automata_actual.estados:
+            txt_info_afd.value = "⚠️ Primero carga o define un autómata."
+            txt_info_afd.color = ft.colors.ORANGE_400
+            page.update()
+            return
+
+        try:
+            afd_convertido, _ = ConvertidorSubconjuntos.afn_a_afd(automata_actual)
+            finales = obtener_finales(afd_convertido)
+
+            txt_info_afd.value = (
+                f"✅ Conversión a AFD completada exitosamente:\n"
+                f"• Q' = {formatear_conjunto(afd_convertido.estados)}\n"
+                f"• Σ = {formatear_conjunto(afd_convertido.alfabeto)}\n"
+                f"• q0' = {afd_convertido.estado_inicial}\n"
+                f"• F' = {formatear_conjunto(finales)}"
+            )
+            txt_info_afd.color = ft.colors.GREEN_400
+
+            # Mostrar Mapeo de Alias -> Subconjuntos
+            mapeo = getattr(afd_convertido, "mapeo_subconjuntos", {})
+            lineas_mapeo = [
+                f"{alias} = {formatear_conjunto(conj)}"
+                for alias, conj in sorted(mapeo.items())
+            ]
+            txt_mapeo_subconjuntos.value = "Equivalencia de subconjuntos:\n" + "\n".join(lineas_mapeo)
+
+            # Construir tabla de transiciones del AFD
+            alfabeto_ordenado = sorted(afd_convertido.alfabeto)
+            columnas = [ft.DataColumn(ft.Text("Estado AFD"))] + [
+                ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
+            ]
+
+            filas = []
+            for est in sorted(afd_convertido.estados):
+                prefijo = ""
+                if est == afd_convertido.estado_inicial:
+                    prefijo += "→ "
+                if est in finales:
+                    prefijo += "* "
+
+                celdas = [ft.DataCell(ft.Text(f"{prefijo}{est}"))]
+                for s in alfabeto_ordenado:
+                    destinos = afd_convertido.transiciones.get((est, s), set())
+                    celdas.append(ft.DataCell(ft.Text(formatear_conjunto(destinos) if destinos else "∅")))
+
+                filas.append(ft.DataRow(cells=celdas))
+
+            data_table_afd.columns = columnas
+            data_table_afd.rows = filas
+        except Exception as err:
+            txt_info_afd.value = f"❌ Error durante la conversión a AFD: {err}"
+            txt_info_afd.color = ft.colors.RED_400
 
         page.update()
 
@@ -635,6 +700,36 @@ def main(page: ft.Page):
         ),
     )
 
+    tab_conversion_afd = ft.Tab(
+        text="2.3 AFN → AFD",
+        icon=ft.icons.MERGE_TYPE,
+        content=ft.Container(
+            padding=15,
+            content=ft.Column(
+                [
+                    ft.Text("2.3 Conversión de AFN a AFD (Construcción por Subconjuntos)", size=18, weight=ft.FontWeight.BOLD),
+                    ft.ElevatedButton(
+                        "Convertir a AFD",
+                        icon=ft.icons.AUTO_FIX_HIGH,
+                        on_click=ejecutar_conversion_afd,
+                    ),
+                    txt_info_afd,
+                    ft.Divider(),
+                    txt_mapeo_subconjuntos,
+                    ft.Divider(),
+                    ft.Text("Tabla de Transiciones del AFD Resultante", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Column(
+                        [data_table_afd],
+                        scroll=ft.ScrollMode.AUTO,
+                        expand=True,
+                    ),
+                ],
+                spacing=15,
+                scroll=ft.ScrollMode.AUTO,
+            ),
+        ),
+    )
+
     tab_operaciones = ft.Tab(
         text="Operaciones",
         icon=ft.icons.CALCULATE,
@@ -669,6 +764,7 @@ def main(page: ft.Page):
             tab_simulacion,
             tab_cerradura_lambda,
             tab_eliminacion_lambda,
+            tab_conversion_afd,
             tab_operaciones,
         ],
         expand=True,
