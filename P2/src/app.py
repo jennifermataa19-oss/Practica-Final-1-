@@ -109,20 +109,33 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # Buscamos el archivo subido en las posibles ubicaciones de upload
-        ruta_directa = os.path.join(UPLOAD_DIR, e.file_name)
-        ruta_relativa = os.path.join("uploads", e.file_name)
-        
-        if os.path.exists(ruta_directa):
-            ruta_servidor = ruta_directa
-        elif os.path.exists(ruta_relativa):
-            ruta_servidor = ruta_relativa
-        else:
-            # Si Flet guardó el archivo en el directorio raíz de la app
-            ruta_servidor = e.file_name
+        # Buscamos todas las posibles ubicaciones reales en el contenedor
+        posibles_rutas = [
+            os.path.join(os.getcwd(), "uploads", e.file_name),
+            os.path.join("/app", "uploads", e.file_name),
+            os.path.join("uploads", e.file_name),
+            e.file_name
+        ]
+
+        ruta_encontrada = None
+        for ruta in posibles_rutas:
+            if os.path.exists(ruta):
+                ruta_encontrada = ruta
+                break
+
+        if not ruta_encontrada:
+            # Si no está directamente con ese nombre, busca dentro de la carpeta uploads el archivo más reciente
+            carpeta_uploads = os.path.join(os.getcwd(), "uploads")
+            if os.path.exists(carpeta_uploads):
+                archivos = [os.path.join(carpeta_uploads, f) for f in os.listdir(carpeta_uploads)]
+                if archivos:
+                    ruta_encontrada = max(archivos, key=os.path.getmtime)
 
         try:
-            automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
+            if not ruta_encontrada:
+                raise FileNotFoundError(f"No se encontró el archivo subido '{e.file_name}' en el servidor.")
+
+            automata_actual = AutomataParser.cargar_desde_archivo(ruta_encontrada)
             actualizar_vistas_definicion()
             txt_status_carga.value = f"✅ Autómata cargado exitosamente: {e.file_name}"
             txt_status_carga.color = ft.colors.GREEN_400
@@ -131,7 +144,6 @@ def main(page: ft.Page):
             txt_status_carga.color = ft.colors.RED_400
 
         page.update()
-
     def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
         """Inicia el envío HTTP del archivo seleccionado."""
         if not e.files or len(e.files) == 0:
