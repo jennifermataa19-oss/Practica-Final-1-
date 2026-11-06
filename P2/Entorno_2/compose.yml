@@ -3,10 +3,14 @@ services:
     build:
       context: ..
       dockerfile: Entorno_2/Dockerfile
-      args:
-        PYTHON_VERSION: "3.12"
     container_name: tc_p2_simulador
-    ports:
-      - "8550:8550"
     volumes:
       - ..:/app
+    ports:
+      - "8550:8550"
+    environment:
+      - FLET_FORCE_WEB_SERVER=true
+      - FLET_SERVER_PORT=8550
+      - FLET_SERVER_IP=0.0.0.0
+      - PYTHONPATH=/app/P2/src:/app/src
+    command: python P2/src/app.py
