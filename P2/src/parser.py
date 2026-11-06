@@ -1,6 +1,6 @@
 import xml.etree.ElementTree as ET
 import json
-from src.automata import Automata
+from automata import Automata
 
 class AutomataParser:
     @staticmethod
