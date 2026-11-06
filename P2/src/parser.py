@@ -26,28 +26,26 @@ class AutomataParser:
         # Si el XML envuelve el autómata dentro de <automaton>
         automaton_node = root.find('automaton') if root.find('automaton') is not None else root
 
-        estados = set()
-        estado_inicial = None
-        estados_aceptacion = set()
-        mapa_id_nombre = {}  # Para mapear id interno de JFLAP al nombre del estado
+        automata = Automata()
+        mapa_id_nombre = {}  # Mapeo de id interno de JFLAP al nombre del estado
 
         # 1. Extraer estados
         for state_node in automaton_node.findall('state'):
             s_id = state_node.get('id')
             s_name = state_node.get('name') or f"q{s_id}"
             
-            estados.add(s_name)
+            automata.agregar_estado(s_name)
             mapa_id_nombre[s_id] = s_name
 
             if state_node.find('initial') is not None:
-                estado_inicial = s_name
+                automata.estado_inicial = s_name
             if state_node.find('final') is not None:
-                estados_aceptacion.add(s_name)
+                if hasattr(automata, "estados_aceptacion"):
+                    automata.estados_aceptacion.add(s_name)
+                if hasattr(automata, "estados_finales"):
+                    automata.estados_finales.add(s_name)
 
         # 2. Extraer transiciones y construir alfabeto
-        alfabeto = set()
-        transiciones = {}
-
         for trans_node in automaton_node.findall('transition'):
             from_node = trans_node.find('from')
             to_node = trans_node.find('to')
@@ -59,6 +57,7 @@ class AutomataParser:
             to_id = to_node.text
             read_node = trans_node.find('read')
             
+            # Si read no tiene texto o no existe, es cadena vacía (lambda/épsilon)
             simbolo = read_node.text.strip() if (read_node is not None and read_node.text) else ''
 
             origen = mapa_id_nombre.get(from_id)
@@ -67,65 +66,53 @@ class AutomataParser:
             if not origen or not destino:
                 continue
 
-            if simbolo != '' and simbolo != 'λ':
-                alfabeto.add(simbolo)
+            # Agregar símbolo al alfabeto si no es lambda/épsilon
+            if simbolo != '' and simbolo != 'λ' and simbolo != 'ε':
+                automata.alfabeto.add(simbolo)
 
-            # Estructura en formato de diccionario anidado: {origen: {simbolo: {destinos}}}
-            if origen not in transiciones:
-                transiciones[origen] = {}
-            if simbolo not in transiciones[origen]:
-                transiciones[origen][simbolo] = set()
-            
-            transiciones[origen][simbolo].add(destino)
+            # Usar método del objeto Automata o fallback directo a diccionario anidado
+            if hasattr(automata, "agregar_transicion"):
+                automata.agregar_transicion(origen, simbolo, destino)
+            else:
+                if origen not in automata.transiciones:
+                    automata.transiciones[origen] = {}
+                if simbolo not in automata.transiciones[origen]:
+                    automata.transiciones[origen][simbolo] = set()
+                automata.transiciones[origen][simbolo].add(destino)
 
-        return Automata(
-            estados=estados,
-            alfabeto=alfabeto,
-            estado_inicial=estado_inicial,
-            estados_aceptacion=estados_aceptacion,
-            transiciones=transiciones
-        )
+        return automata
 
     @staticmethod
     def desde_json(ruta_archivo):
-        """
-        Lee un autómata representado en formato JSON estructurado.
-        Formato esperado:
-        {
-            "estados": ["q0", "q1"],
-            "alfabeto": ["0", "1"],
-            "estado_inicial": "q0",
-            "estados_aceptacion": ["q1"],
-            "transiciones": [
-                {"origen": "q0", "simbolo": "0", "destino": "q1"}
-            ]
-        }
-        """
+        """Lee un autómata representado en formato JSON estructurado."""
         with open(ruta_archivo, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        estados = set(data.get('estados', []))
-        alfabeto = set(data.get('alfabeto', []))
-        estado_inicial = data.get('estado_inicial')
-        estados_aceptacion = set(data.get('estados_aceptacion', []))
+        automata = Automata()
+        for est in data.get('estados', []):
+            automata.agregar_estado(est)
+
+        automata.alfabeto = set(data.get('alfabeto', []))
+        automata.estado_inicial = data.get('estado_inicial')
         
-        transiciones = {}
+        finales = set(data.get('estados_aceptacion', data.get('estados_finales', [])))
+        if hasattr(automata, "estados_aceptacion"):
+            automata.estados_aceptacion = finales
+        if hasattr(automata, "estados_finales"):
+            automata.estados_finales = finales
+
         for t in data.get('transiciones', []):
             origen = t['origen']
             simbolo = t['simbolo']
             destino = t['destino']
 
-            if origen not in transiciones:
-                transiciones[origen] = {}
-            if simbolo not in transiciones[origen]:
-                transiciones[origen][simbolo] = set()
+            if hasattr(automata, "agregar_transicion"):
+                automata.agregar_transicion(origen, simbolo, destino)
+            else:
+                if origen not in automata.transiciones:
+                    automata.transiciones[origen] = {}
+                if simbolo not in automata.transiciones[origen]:
+                    automata.transiciones[origen][simbolo] = set()
+                automata.transiciones[origen][simbolo].add(destino)
 
-            transiciones[origen][simbolo].add(destino)
-
-        return Automata(
-            estados=estados,
-            alfabeto=alfabeto,
-            estado_inicial=estado_inicial,
-            estados_aceptacion=estados_aceptacion,
-            transiciones=transiciones
-        )
+        return automata
