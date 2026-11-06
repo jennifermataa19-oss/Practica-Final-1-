@@ -121,6 +121,7 @@ def main(page: ft.Page):
             for simbolo in alfabeto_ordenado:
                 # Búsqueda usando la tupla (est, simbolo) que usa tu clase Automata
                 destinos = automata_actual.transiciones.get((est, simbolo), set())
+                print(repr(est), repr(simbolo), destinos)
                 destinos_str = (
                     "{" + ", ".join(sorted(destinos)) + "}" if destinos else "∅"
                 )
@@ -138,8 +139,8 @@ def main(page: ft.Page):
         if automata_actual.estados:
             dropdown_estado_cerradura.value = sorted(list(automata_actual.estados))[0]
 
+        data_table_transiciones.update()
         page.update()
-
     # -------------------------------------------------------------------------
     # BUSCADOR Y MANEJO DE ARCHIVOS SUBIDOS (WEB UPLOADS)
     # -------------------------------------------------------------------------
