@@ -2,10 +2,12 @@ services:
   py311:
     build:
       context: ..
-      dockerfile: entorno/Dockerfile
+      dockerfile: Entorno/Dockerfile
       args:
         PYTHON_VERSION: "3.11"
     container_name: tc_p2_py311
     volumes:
-        - ../:/app
-    command: python src/interfaz_2.py
+      - ../:/app
+    ports:
+      - "8550:8550"
+    command: python src/interfaz.py
