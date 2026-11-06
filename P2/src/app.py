@@ -1,5 +1,4 @@
 import os
-import tempfile
 import flet as ft
 
 from automata import Automata
@@ -12,6 +11,10 @@ def main(page: ft.Page):
     page.title = "Simulador de Autómatas Finitos - Práctica 2"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 20
+
+    # Carpeta interna en el contenedor para alojar los archivos subidos
+    UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
+    os.makedirs(UPLOAD_DIR, exist_ok=True)
 
     # Variable global del autómata activo en la sesión
     automata_actual = Automata()
@@ -73,7 +76,6 @@ def main(page: ft.Page):
         filas = []
         for est in sorted(automata_actual.estados):
             celdas = []
-            # Indicador de estado inicial / final
             prefix = ""
             if est == automata_actual.estado_inicial:
                 prefix += "→ "
@@ -96,35 +98,40 @@ def main(page: ft.Page):
         page.update()
 
     # -------------------------------------------------------------------------
-    # COMPONENTES FILEPICKER (CARGA / DESCARGA WEB EN DOCKER)
+    # FILEPICKER CON TRANSFERENCIA DE ARCHIVOS (WEB UPLOAD)
     # -------------------------------------------------------------------------
-    def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
+    def al_cargar_completado(e: ft.FilePickerUploadEvent):
+        """Disparado cuando el archivo termina de transferirse al servidor en Docker."""
         nonlocal automata_actual
-        if not e.files or len(e.files) == 0:
+        if e.error:
+            txt_status_carga.value = f"❌ Error de transferencia: {e.error}"
+            txt_status_carga.color = ft.colors.RED_400
+            page.update()
             return
 
-        archivo = e.files[0]
-        nombre_archivo = archivo.name
-
+        ruta_servidor = os.path.join(UPLOAD_DIR, e.file_name)
         try:
-            # En Flet Web dentro de Docker, e.files[0].path es None.
-            # Si se usó upload o viene local, procesamos la ruta correspondiente:
-            if archivo.path and os.path.exists(archivo.path):
-                ruta_final = archivo.path
-            else:
-                # Si no hay path directo, intentamos guardarlo temporalmente o procesar por nombre
-                ruta_final = nombre_archivo
-
-            automata_actual = AutomataParser.cargar_desde_archivo(ruta_final)
+            automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
             actualizar_vistas_definicion()
-
-            txt_status_carga.value = f"✅ Autómata cargado exitosamente: {nombre_archivo}"
+            txt_status_carga.value = f"✅ Autómata cargado exitosamente: {e.file_name}"
             txt_status_carga.color = ft.colors.GREEN_400
         except Exception as err:
-            txt_status_carga.value = f"❌ Error al cargar archivo: {str(err)}"
+            txt_status_carga.value = f"❌ Error al procesar el archivo: {str(err)}"
             txt_status_carga.color = ft.colors.RED_400
 
         page.update()
+
+    def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
+        """Inicia el envío del archivo desde el cliente web hacia Docker."""
+        if e.files and len(e.files) > 0:
+            file_picker_abrir.upload(
+                [
+                    ft.FilePickerUploadFile(
+                        e.files[0].name,
+                        upload_url=page.get_upload_url(e.files[0].name, 600),
+                    )
+                ]
+            )
 
     def al_guardar_archivo(e: ft.FilePickerResultEvent):
         if not e.path:
@@ -137,11 +144,10 @@ def main(page: ft.Page):
             elif ruta_destino.endswith(".jff") or ruta_destino.endswith(".xml"):
                 AutomataExporter.a_jff_xml(automata_actual, ruta_destino)
             else:
-                # Extensión por defecto si no especifica
                 ruta_destino += ".json"
                 AutomataExporter.a_json(automata_actual, ruta_destino)
 
-            txt_status_carga.value = f"✅ Archivo guardado correctamente en: {ruta_destino}"
+            txt_status_carga.value = f"✅ Archivo guardado en: {ruta_destino}"
             txt_status_carga.color = ft.colors.GREEN_400
         except Exception as err:
             txt_status_carga.value = f"❌ Error al guardar archivo: {str(err)}"
@@ -149,7 +155,10 @@ def main(page: ft.Page):
 
         page.update()
 
-    file_picker_abrir = ft.FilePicker(on_result=al_seleccionar_archivo)
+    file_picker_abrir = ft.FilePicker(
+        on_result=al_seleccionar_archivo,
+        on_upload=al_cargar_completado
+    )
     file_picker_guardar = ft.FilePicker(on_result=al_guardar_archivo)
 
     page.overlay.append(file_picker_abrir)
@@ -210,7 +219,6 @@ def main(page: ft.Page):
     # -------------------------------------------------------------------------
     # PESTAÑAS DE LA INTERFAZ
     # -------------------------------------------------------------------------
-    # Tab 1: Definición Formal y Tabla
     tab_definicion = ft.Tab(
         text="Definición y Transiciones",
         icon=ft.icons.TABLE_CHART,
@@ -229,7 +237,6 @@ def main(page: ft.Page):
         )
     )
 
-    # Tab 2: Archivos (Cargar / Guardar)
     tab_archivos = ft.Tab(
         text="Archivos",
         icon=ft.icons.FOLDER_OPEN,
@@ -267,7 +274,6 @@ def main(page: ft.Page):
         )
     )
 
-    # Tab 3: Simulación Paso a Paso
     tab_simulacion = ft.Tab(
         text="Simulación",
         icon=ft.icons.PLAY_ARROW,
@@ -297,7 +303,6 @@ def main(page: ft.Page):
         )
     )
 
-    # Tab 4: Operaciones sobre Lenguajes
     tab_operaciones = ft.Tab(
         text="Operaciones",
         icon=ft.icons.CALCULATE,
@@ -323,7 +328,6 @@ def main(page: ft.Page):
         )
     )
 
-    # Añadir Tabs principales a la página
     tabs = ft.Tabs(
         selected_index=0,
         animation_duration=300,
@@ -339,6 +343,7 @@ if __name__ == "__main__":
     ft.app(
         target=main,
         view=ft.AppView.WEB_BROWSER,
+        upload_dir="uploads",
         host="0.0.0.0",
         port=8550
     )
