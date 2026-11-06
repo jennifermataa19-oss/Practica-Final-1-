@@ -11,13 +11,17 @@ def main(page: ft.Page):
     page.title = "Simulador de Autómatas Finitos - Práctica 2"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 20
-    UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
+
+    # Carpeta unificada en la raíz del proyecto para uploads
+    BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-    # Autómata activo en la sesión
+
+    # Variable global del autómata activo en la sesión
     automata_actual = Automata()
 
     # -------------------------------------------------------------------------
-    # COMPONENTES DE INTERFAZ
+    # COMPONENTES DE ESTADO / INTERFAZ
     # -------------------------------------------------------------------------
     txt_status_carga = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
     txt_definicion_formal = ft.Text(
@@ -28,7 +32,7 @@ def main(page: ft.Page):
         rows=[]
     )
 
-    # Componentes para simulación
+    # Componentes para simulación paso a paso
     input_cadena_simular = ft.TextField(
         label="Cadena a simular (ej. 0101)", width=300
     )
@@ -37,13 +41,13 @@ def main(page: ft.Page):
         expand=1, spacing=5, padding=10, auto_scroll=True, height=200
     )
 
-    # Componentes para operaciones
+    # Componentes para operaciones sobre lenguajes
     input_cadena_op1 = ft.TextField(label="Cadena 1", width=200)
     input_cadena_op2 = ft.TextField(label="Cadena 2", width=200)
     txt_resultado_operacion = ft.Text("", size=15, selectable=True)
 
     # -------------------------------------------------------------------------
-    # ACTUALIZACIÓN DE VISTAS
+    # FUNCIONES AUXILIARES DE ACTUALIZACIÓN
     # -------------------------------------------------------------------------
     def actualizar_vistas_definicion():
         """Actualiza la tabla de transiciones y la definición formal en pantalla."""
@@ -64,7 +68,7 @@ def main(page: ft.Page):
             f"Definición Formal:\n• {q_str}\n• {alphabet_str}\n• {q0_str}\n• {f_str}"
         )
 
-        # Construcción de la Data Table
+        # Construcción de la Data Table de transiciones
         alfabeto_ordenado = sorted(list(automata_actual.alfabeto))
         columnas = [ft.DataColumn(ft.Text("Estado"))] + [
             ft.DataColumn(ft.Text(simbolo)) for simbolo in alfabeto_ordenado
@@ -95,11 +99,35 @@ def main(page: ft.Page):
         page.update()
 
     # -------------------------------------------------------------------------
-    # MANEJO DE ARCHIVOS (WEB UPLOADS)
+    # BUSCADOR ROBUSTO DE ARCHIVOS EN DOCKER
     # -------------------------------------------------------------------------
-    
+    def buscar_archivo_subido(nombre_target):
+        """Escanea recursivamente las carpetas del proyecto buscando el archivo recién subido."""
+        # 1. Comprobación directa en posibles rutas fijas
+        rutas_directas = [
+            os.path.join(UPLOAD_DIR, nombre_target),
+            os.path.join(BASE_DIR, "src", "uploads", nombre_target),
+            os.path.join(BASE_DIR, nombre_target),
+            os.path.join(UPLOAD_DIR, "uploads", nombre_target)
+        ]
+        for r in rutas_directas:
+            if os.path.exists(r):
+                return r
+
+        # 2. Escaneo recursivo dentro de la carpeta UPLOAD_DIR y BASE_DIR
+        for root_dir in [UPLOAD_DIR, BASE_DIR]:
+            if os.path.exists(root_dir):
+                for root, _, files in os.walk(root_dir):
+                    if nombre_target in files:
+                        return os.path.join(root, nombre_target)
+
+        return None
+
+    # -------------------------------------------------------------------------
+    # FILEPICKER CON TRANSFERENCIA DE ARCHIVOS (WEB UPLOAD)
+    # -------------------------------------------------------------------------
     def al_cargar_completado(e: ft.FilePickerUploadEvent):
-        """Se ejecuta cuando el archivo finaliza la subida al contenedor."""
+        """Disparado cuando finaliza la subida al contenedor."""
         nonlocal automata_actual
         if e.error:
             txt_status_carga.value = f"❌ Error de transferencia: {e.error}"
@@ -107,20 +135,16 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # Busca el archivo directamente en la carpeta UPLOAD_DIR
-        ruta_servidor = os.path.join(UPLOAD_DIR, e.file_name)
+        # Encontrar la ruta exacta donde se guardó el archivo
+        ruta_servidor = buscar_archivo_subido(e.file_name)
 
         try:
-            if not os.path.exists(ruta_servidor):
-                # Respaldo: si Flet lo guardó en src/uploads por error
-                ruta_backup = os.path.join(os.path.dirname(__file__), "uploads", e.file_name)
-                if os.path.exists(ruta_backup):
-                    ruta_servidor = ruta_backup
-                else:
-                    raise FileNotFoundError(f"No se encontró el archivo subido en '{ruta_servidor}'")
+            if not ruta_servidor:
+                raise FileNotFoundError(f"No se encontró el archivo '{e.file_name}' en ninguna ruta del servidor.")
 
             automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
             actualizar_vistas_definicion()
+
             txt_status_carga.value = f"✅ Autómata cargado exitosamente: {e.file_name}"
             txt_status_carga.color = ft.colors.GREEN_400
         except Exception as err:
@@ -135,15 +159,12 @@ def main(page: ft.Page):
             return
 
         archivo = e.files[0]
-        
-        # Obtenemos la URL firmada
         upload_url = page.get_upload_url(archivo.name, 600)
 
         txt_status_carga.value = f"⏳ Cargando {archivo.name}..."
         txt_status_carga.color = ft.colors.BLUE_400
         page.update()
 
-        # Usamos método PUT para coincidir con la firma firmada del servidor estático
         file_picker_abrir.upload(
             [
                 ft.FilePickerUploadFile(
