@@ -12,16 +12,16 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 20
 
-    # Carpeta unificada en la raíz del proyecto para uploads
+    # Carpeta unificada en la raíz del proyecto para alojar las subidas
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # Variable global del autómata activo en la sesión
+    # Autómata activo en la sesión
     automata_actual = Automata()
 
     # -------------------------------------------------------------------------
-    # COMPONENTES DE ESTADO / INTERFAZ
+    # COMPONENTES DE INTERFAZ
     # -------------------------------------------------------------------------
     txt_status_carga = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
     txt_definicion_formal = ft.Text(
@@ -99,38 +99,34 @@ def main(page: ft.Page):
         page.update()
 
     # -------------------------------------------------------------------------
-    # BUSCADOR ROBUSTO DE ARCHIVOS EN DOCKER
+    # BUSCADOR DE ARCHIVOS SUBIDOS EN EL CONTENEDOR
     # -------------------------------------------------------------------------
-    def buscar_archivo_subido(nombre_target):
-        """Escanea recursivamente las carpetas del proyecto buscando el archivo recién subido."""
-        # 1. Comprobación directa en posibles rutas fijas
+    def resolver_ruta_archivo(nombre_archivo):
+        """Ubica el archivo subido dentro de la carpeta uploads o subdirectorios."""
         rutas_directas = [
-            os.path.join(UPLOAD_DIR, nombre_target),
-            os.path.join(BASE_DIR, "src", "uploads", nombre_target),
-            os.path.join(BASE_DIR, nombre_target),
-            os.path.join(UPLOAD_DIR, "uploads", nombre_target)
+            os.path.join(UPLOAD_DIR, nombre_archivo),
+            os.path.join(BASE_DIR, "uploads", nombre_archivo),
+            os.path.join("/app", "uploads", nombre_archivo),
+            os.path.join(BASE_DIR, "src", "uploads", nombre_archivo),
+            os.path.join(BASE_DIR, nombre_archivo),
         ]
         for r in rutas_directas:
             if os.path.exists(r):
                 return r
 
-        # 2. Escaneo recursivo dentro de la carpeta UPLOAD_DIR y BASE_DIR
+        # Búsqueda recursiva dentro de la estructura del proyecto
         for root_dir in [UPLOAD_DIR, BASE_DIR]:
             if os.path.exists(root_dir):
                 for root, _, files in os.walk(root_dir):
-                    if nombre_target in files:
-                        return os.path.join(root, nombre_target)
-
+                    if nombre_archivo in files:
+                        return os.path.join(root, nombre_archivo)
         return None
 
     # -------------------------------------------------------------------------
-    # FILEPICKER CON TRANSFERENCIA DE ARCHIVOS (WEB UPLOAD)
-    # -------------------------------------------------------------------------
-    # -------------------------------------------------------------------------
-    # FILEPICKER CON TRANSFERENCIA DE ARCHIVOS (WEB UPLOAD)
+    # MANEJO DE ARCHIVOS (WEB UPLOADS)
     # -------------------------------------------------------------------------
     def al_cargar_completado(e: ft.FilePickerUploadEvent):
-        """Se ejecuta una vez que Flet confirma que terminó el Upload."""
+        """Se ejecuta cuando Flet confirma que la subida HTTP finalizó."""
         nonlocal automata_actual
         if e.error:
             txt_status_carga.value = f"❌ Error de transferencia: {e.error}"
@@ -138,20 +134,16 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # Ruta directa dentro de la carpeta uploads unificada
-        ruta_servidor = os.path.join(UPLOAD_DIR, e.file_name)
+        ruta_servidor = resolver_ruta_archivo(e.file_name)
 
         try:
-            # Si por algún detalle no está ahí, buscamos dentro de /app/uploads/
-            if not os.path.exists(ruta_servidor):
-                ruta_servidor = os.path.join("/app", "uploads", e.file_name)
-
-            if not os.path.exists(ruta_servidor):
-                raise FileNotFoundError(f"No se encontró el archivo '{e.file_name}' en {ruta_servidor}")
+            if not ruta_servidor:
+                raise FileNotFoundError(
+                    f"No se encontró el archivo '{e.file_name}' en el servidor."
+                )
 
             automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
             actualizar_vistas_definicion()
-
             txt_status_carga.value = f"✅ Autómata cargado exitosamente: {e.file_name}"
             txt_status_carga.color = ft.colors.GREEN_400
         except Exception as err:
@@ -161,16 +153,14 @@ def main(page: ft.Page):
         page.update()
 
     def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
-        """Dispara el Upload enviando el archivo a la carpeta configurada."""
+        """Genera el upload usando POST explícito para evitar 'Invalid request'."""
         if not e.files or len(e.files) == 0:
             return
 
         archivo = e.files[0]
-        
-        # Generamos la URL de upload firmada usando la clave de Flet
         upload_url = page.get_upload_url(archivo.name, 600)
 
-        txt_status_carga.value = f"⏳ Cargando {archivo.name}..."
+        txt_status_carga.value = f"⏳ Transfiriendo {archivo.name}..."
         txt_status_carga.color = ft.colors.BLUE_400
         page.update()
 
@@ -179,7 +169,7 @@ def main(page: ft.Page):
                 ft.FilePickerUploadFile(
                     name=archivo.name,
                     upload_url=upload_url,
-                    method="PUT",
+                    method="POST",
                 )
             ]
         )
@@ -268,7 +258,7 @@ def main(page: ft.Page):
         page.update()
 
     # -------------------------------------------------------------------------
-    # ESTRUCTURA DE PESTAÑAS
+    # PESTAÑAS DE LA INTERFAZ
     # -------------------------------------------------------------------------
     tab_definicion = ft.Tab(
         text="Definición y Transiciones",
