@@ -5,10 +5,11 @@ from automata import Automata
 from parser import AutomataParser
 from exporter import AutomataExporter
 from operaciones import OperacionesLenguaje
+from cerradura_lambda import CerraduraLambdaSimulador
 
 
 def main(page: ft.Page):
-    page.title = "Simulador de Autómatas Finitos - Práctica 2"
+    page.title = "Simulador de Autómatas Finitos - Práctica 3"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 20
 
@@ -21,8 +22,9 @@ def main(page: ft.Page):
     automata_actual = Automata()
 
     # -------------------------------------------------------------------------
-    # COMPONENTES DE INTERFAZ
+    # COMPONENTES DE INTERFAZ (TODAS LAS PESTAÑAS)
     # -------------------------------------------------------------------------
+    # Pestaña 1: Definición y Transiciones
     txt_status_carga = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
     txt_definicion_formal = ft.Text(
         "No hay autómata cargado.", size=14, selectable=True
@@ -32,7 +34,7 @@ def main(page: ft.Page):
         rows=[]
     )
 
-    # Componentes para simulación paso a paso
+    # Pestaña 2: Simulación Estándar
     input_cadena_simular = ft.TextField(
         label="Cadena a simular (ej. 0101)", width=300
     )
@@ -41,7 +43,28 @@ def main(page: ft.Page):
         expand=1, spacing=5, padding=10, auto_scroll=True, height=200
     )
 
-    # Componentes para operaciones sobre lenguajes
+    # Pestaña 3: Sección 2.1 - Cerradura Lambda & Simulación Directa AFN-λ
+    dropdown_estado_cerradura = ft.Dropdown(
+        label="Seleccionar Estado", width=200, options=[]
+    )
+    txt_resultado_cerradura = ft.Text("", size=15, weight=ft.FontWeight.BOLD)
+
+    input_cadena_directa = ft.TextField(
+        label="Cadena a simular en AFN-λ", width=300
+    )
+    txt_resultado_simulacion_directa = ft.Text("", size=16, weight=ft.FontWeight.BOLD)
+    data_table_pasos_directos = ft.DataTable(
+        columns=[
+            ft.DataColumn(ft.Text("Paso")),
+            ft.DataColumn(ft.Text("Símbolo")),
+            ft.DataColumn(ft.Text("Activos (Antes CL)")),
+            ft.DataColumn(ft.Text("Activos (Después CL)")),
+            ft.DataColumn(ft.Text("Detalle")),
+        ],
+        rows=[]
+    )
+
+    # Pestaña 4: Operaciones sobre Lenguajes
     input_cadena_op1 = ft.TextField(label="Cadena 1", width=200)
     input_cadena_op2 = ft.TextField(label="Cadena 2", width=200)
     txt_resultado_operacion = ft.Text("", size=15, selectable=True)
@@ -50,11 +73,20 @@ def main(page: ft.Page):
     # FUNCIONES AUXILIARES DE ACTUALIZACIÓN
     # -------------------------------------------------------------------------
     def actualizar_vistas_definicion():
-        """Actualiza la tabla de transiciones y la definición formal en pantalla."""
+        """Actualiza la tabla de transiciones, la definición formal y controles."""
+        # Detectamos el atributo de estados finales/aceptación
+        finales = getattr(
+            automata_actual,
+            "estados_aceptacion",
+            getattr(automata_actual, "estados_finales", getattr(automata_actual, "finales", set())),
+        )
+
         if not automata_actual.estados:
             txt_definicion_formal.value = "Autómata vacío."
             data_table_transiciones.columns = [ft.DataColumn(ft.Text("Estado"))]
             data_table_transiciones.rows = []
+            dropdown_estado_cerradura.options = []
+            dropdown_estado_cerradura.value = None
             page.update()
             return
 
@@ -62,11 +94,6 @@ def main(page: ft.Page):
         q_str = f"Q = {{{', '.join(sorted(automata_actual.estados))}}}"
         alphabet_str = f"Σ = {{{', '.join(sorted(automata_actual.alfabeto))}}}"
         q0_str = f"q0 = {automata_actual.estado_inicial}"
-        finales = getattr(
-            automata_actual,
-            "estados_aceptacion",
-            getattr(automata_actual, "estados_finales", getattr(automata_actual, "finales", set())),
-        )
         f_str = f"F = {{{', '.join(sorted(finales))}}}"
 
         txt_definicion_formal.value = (
@@ -101,10 +128,18 @@ def main(page: ft.Page):
 
         data_table_transiciones.columns = columnas
         data_table_transiciones.rows = filas
+
+        # Actualizar opciones del dropdown de estados para Cerradura Lambda (Sec. 2.1)
+        dropdown_estado_cerradura.options = [
+            ft.dropdown.Option(est) for est in sorted(automata_actual.estados)
+        ]
+        if automata_actual.estados:
+            dropdown_estado_cerradura.value = sorted(list(automata_actual.estados))[0]
+
         page.update()
 
     # -------------------------------------------------------------------------
-    # BUSCADOR DE ARCHIVOS SUBIDOS EN EL CONTENEDOR
+    # BUSCADOR Y MANEJO DE ARCHIVOS SUBIDOS (WEB UPLOADS)
     # -------------------------------------------------------------------------
     def resolver_ruta_archivo(nombre_archivo):
         """Ubica el archivo subido dentro de la carpeta uploads o subdirectorios."""
@@ -127,9 +162,6 @@ def main(page: ft.Page):
                         return os.path.join(root, nombre_archivo)
         return None
 
-    # -------------------------------------------------------------------------
-    # MANEJO DE ARCHIVOS (WEB UPLOADS)
-    # -------------------------------------------------------------------------
     def al_cargar_completado(e: ft.FilePickerUploadEvent):
         """Se ejecuta cuando Flet confirma que la subida HTTP finalizó."""
         nonlocal automata_actual
@@ -169,7 +201,6 @@ def main(page: ft.Page):
         txt_status_carga.color = ft.colors.BLUE_400
         page.update()
 
-        # Usamos método PUT para evitar el 405 Method Not Allowed
         file_picker_abrir.upload(
             [
                 ft.FilePickerUploadFile(
@@ -212,7 +243,7 @@ def main(page: ft.Page):
     page.overlay.append(file_picker_guardar)
 
     # -------------------------------------------------------------------------
-    # EVENTOS DE BOTONES
+    # MANEJADORES DE EVENTOS DE BOTONES
     # -------------------------------------------------------------------------
     def ejecutar_simulacion(e):
         list_pasos_simulacion.controls.clear()
@@ -237,6 +268,62 @@ def main(page: ft.Page):
         else:
             txt_resultado_simulacion.value = f"🚫 CADENA RECHAZADA ('{cadena}')"
             txt_resultado_simulacion.color = ft.colors.RED_400
+
+        page.update()
+
+    def calcular_cerradura_individual(e):
+        """Calcula CL(estado) para el estado elegido en la Sección 2.1."""
+        estado_sel = dropdown_estado_cerradura.value
+        if not estado_sel:
+            txt_resultado_cerradura.value = "⚠️ Selecciona un estado."
+            txt_resultado_cerradura.color = ft.colors.ORANGE_400
+            page.update()
+            return
+
+        cerradura = CerraduraLambdaSimulador.calcular_cerradura_estado(
+            automata_actual, estado_sel
+        )
+        txt_resultado_cerradura.value = f"CL({estado_sel}) = {{{', '.join(sorted(cerradura))}}}"
+        txt_resultado_cerradura.color = ft.colors.GREEN_400
+        page.update()
+
+    def ejecutar_simulacion_directa(e):
+        """Ejecuta la simulación directa de AFN-lambda para la Sección 2.1."""
+        data_table_pasos_directos.rows.clear()
+        cadena = input_cadena_directa.value.strip() if input_cadena_directa.value else ""
+
+        if not automata_actual.estados:
+            txt_resultado_simulacion_directa.value = "⚠️ Primero carga o define un autómata."
+            txt_resultado_simulacion_directa.color = ft.colors.ORANGE_400
+            page.update()
+            return
+
+        es_valida, historial = CerraduraLambdaSimulador.simular_directo_paso_a_paso(
+            automata_actual, cadena
+        )
+
+        filas = []
+        for paso in historial:
+            filas.append(
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(str(paso["paso"]))),
+                        ft.DataCell(ft.Text(paso["simbolo"])),
+                        ft.DataCell(ft.Text(paso["activos_antes"])),
+                        ft.DataCell(ft.Text(paso["activos_despues"])),
+                        ft.DataCell(ft.Text(paso["descripcion"])),
+                    ]
+                )
+            )
+
+        data_table_pasos_directos.rows = filas
+
+        if es_valida:
+            txt_resultado_simulacion_directa.value = f"🎉 ¡CADENA ACEPTADA DIRECTAMENTE! ('{cadena}')"
+            txt_resultado_simulacion_directa.color = ft.colors.GREEN_400
+        else:
+            txt_resultado_simulacion_directa.value = f"🚫 CADENA RECHAZADA DIRECTAMENTE ('{cadena}')"
+            txt_resultado_simulacion_directa.color = ft.colors.RED_400
 
         page.update()
 
@@ -350,6 +437,49 @@ def main(page: ft.Page):
         )
     )
 
+    # Pestaña para la Sección 2.1
+    tab_cerradura_lambda = ft.Tab(
+        text="Cerradura λ & Sim. Directa",
+        icon=ft.icons.ACCOUNT_TREE,
+        content=ft.Container(
+            padding=15,
+            content=ft.Column(
+                [
+                    ft.Text("2.1 Cerradura λ de un Estado", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Row(
+                        [
+                            dropdown_estado_cerradura,
+                            ft.ElevatedButton(
+                                "Calcular CL(s)",
+                                icon=ft.icons.CALCULATE,
+                                on_click=calcular_cerradura_individual
+                            )
+                        ],
+                        spacing=15
+                    ),
+                    txt_resultado_cerradura,
+                    ft.Divider(),
+                    ft.Text("Simulación Directa de AFN-λ (Sin conversión)", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Row(
+                        [
+                            input_cadena_directa,
+                            ft.ElevatedButton(
+                                "Simular AFN-λ",
+                                icon=ft.icons.PLAY_ARROW,
+                                on_click=ejecutar_simulacion_directa
+                            )
+                        ],
+                        spacing=15
+                    ),
+                    txt_resultado_simulacion_directa,
+                    ft.Column([data_table_pasos_directos], scroll=ft.ScrollMode.AUTO, expand=True)
+                ],
+                spacing=15,
+                scroll=ft.ScrollMode.AUTO
+            )
+        )
+    )
+
     tab_operaciones = ft.Tab(
         text="Operaciones",
         icon=ft.icons.CALCULATE,
@@ -378,7 +508,13 @@ def main(page: ft.Page):
     tabs = ft.Tabs(
         selected_index=0,
         animation_duration=300,
-        tabs=[tab_definicion, tab_archivos, tab_simulacion, tab_operaciones],
+        tabs=[
+            tab_definicion,
+            tab_archivos,
+            tab_simulacion,
+            tab_cerradura_lambda,
+            tab_operaciones
+        ],
         expand=True
     )
 
