@@ -6,6 +6,7 @@ from parser import AutomataParser
 from exporter import AutomataExporter
 from operaciones import OperacionesLenguaje
 from cerradura_lambda import CerraduraLambdaSimulador
+from eliminacion_lambda import EliminadorLambda
 
 
 def formatear_conjunto(conjunto):
@@ -25,6 +26,7 @@ def main(page: ft.Page):
 
     # Autómata activo en la sesión
     automata_actual = Automata()
+    automata_sin_lambda_convertido = None
 
     # -------------------------------------------------------------------------
     # COMPONENTES DE INTERFAZ
@@ -48,7 +50,7 @@ def main(page: ft.Page):
         expand=1, spacing=5, padding=10, auto_scroll=True, height=200
     )
 
-    # Pestaña 4: Cerradura λ y simulación directa AFN-λ
+    # Pestaña 4: Sección 2.1 - Cerradura λ y simulación directa AFN-λ
     dropdown_estado_cerradura = ft.Dropdown(
         label="Seleccionar Estado", width=200, options=[]
     )
@@ -69,7 +71,14 @@ def main(page: ft.Page):
         rows=[],
     )
 
-    # Pestaña 5: Operaciones sobre lenguajes
+    # Pestaña 5: Sección 2.2 - Eliminación de transiciones λ
+    txt_info_conversion_lambda = ft.Text("", size=14, selectable=True)
+    data_table_afn_sin_lambda = ft.DataTable(
+        columns=[ft.DataColumn(ft.Text("Estado"))],
+        rows=[],
+    )
+
+    # Pestaña 6: Operaciones sobre lenguajes
     input_cadena_op1 = ft.TextField(label="Cadena 1", width=200)
     input_cadena_op2 = ft.TextField(label="Cadena 2", width=200)
     txt_resultado_operacion = ft.Text("", size=15, selectable=True)
@@ -77,15 +86,16 @@ def main(page: ft.Page):
     # -------------------------------------------------------------------------
     # FUNCIONES AUXILIARES
     # -------------------------------------------------------------------------
-    def obtener_finales():
+    def obtener_finales(automata_target=None):
         """Obtiene el conjunto de estados de aceptación sin importar el nombre del atributo."""
+        target = automata_target if automata_target else automata_actual
         return getattr(
-            automata_actual,
+            target,
             "estados_aceptacion",
             getattr(
-                automata_actual,
+                target,
                 "estados_finales",
-                getattr(automata_actual, "finales", set()),
+                getattr(target, "finales", set()),
             ),
         )
 
@@ -142,7 +152,8 @@ def main(page: ft.Page):
         dropdown_estado_cerradura.options = [
             ft.dropdown.Option(est) for est in estados_ordenados
         ]
-        dropdown_estado_cerradura.value = estados_ordenados[0]
+        if estados_ordenados:
+            dropdown_estado_cerradura.value = estados_ordenados[0]
 
         page.update()
 
@@ -153,6 +164,8 @@ def main(page: ft.Page):
         txt_resultado_cerradura.value = ""
         txt_resultado_simulacion_directa.value = ""
         data_table_pasos_directos.rows = []
+        txt_info_conversion_lambda.value = ""
+        data_table_afn_sin_lambda.rows = []
 
     # -------------------------------------------------------------------------
     # MANEJO DE ARCHIVOS (WEB UPLOADS)
@@ -169,7 +182,6 @@ def main(page: ft.Page):
             if os.path.exists(ruta):
                 return ruta
 
-        # Búsqueda recursiva como último recurso
         for root_dir in [UPLOAD_DIR, BASE_DIR]:
             if os.path.exists(root_dir):
                 for root, _, files in os.walk(root_dir):
@@ -187,7 +199,6 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # Flet dispara este evento varias veces (progreso); solo actuamos al 100 %
         if e.progress is not None and e.progress < 1:
             return
 
@@ -267,7 +278,6 @@ def main(page: ft.Page):
     # MANEJADORES DE EVENTOS
     # -------------------------------------------------------------------------
     def texto_de_paso(paso):
-        """Convierte un paso de la traza (dict) en una línea legible."""
         if not isinstance(paso, dict):
             return str(paso)
 
@@ -315,7 +325,7 @@ def main(page: ft.Page):
         page.update()
 
     def calcular_cerradura_individual(e):
-        """Calcula CL(estado) para el estado elegido."""
+        """Calcula CL(estado) para el estado elegido (Sección 2.1)."""
         estado_sel = dropdown_estado_cerradura.value
         if not estado_sel:
             txt_resultado_cerradura.value = "⚠️ Selecciona un estado."
@@ -338,7 +348,7 @@ def main(page: ft.Page):
         page.update()
 
     def ejecutar_simulacion_directa(e):
-        """Simulación directa de AFN-λ (sin convertir)."""
+        """Simulación directa de AFN-λ sin convertir (Sección 2.1)."""
         data_table_pasos_directos.rows = []
         cadena = input_cadena_directa.value.strip() if input_cadena_directa.value else ""
 
@@ -382,6 +392,61 @@ def main(page: ft.Page):
 
         page.update()
 
+    def ejecutar_eliminacion_lambda(e):
+        """Conversión de AFN-λ a AFN equivalente sin λ (Sección 2.2)."""
+        nonlocal automata_sin_lambda_convertido
+        data_table_afn_sin_lambda.rows = []
+
+        if not automata_actual.estados:
+            txt_info_conversion_lambda.value = "⚠️ Primero carga o define un autómata."
+            txt_info_conversion_lambda.color = ft.colors.ORANGE_400
+            page.update()
+            return
+
+        try:
+            automata_sin_lambda_convertido, _ = EliminadorLambda.eliminar_transiciones_lambda(
+                automata_actual
+            )
+
+            finales = obtener_finales(automata_sin_lambda_convertido)
+
+            txt_info_conversion_lambda.value = (
+                f"✅ Conversión completada exitosamente:\n"
+                f"• Q = {formatear_conjunto(automata_sin_lambda_convertido.estados)}\n"
+                f"• Σ = {formatear_conjunto(automata_sin_lambda_convertido.alfabeto)}\n"
+                f"• q0 = {automata_sin_lambda_convertido.estado_inicial}\n"
+                f"• F = {formatear_conjunto(finales)}"
+            )
+            txt_info_conversion_lambda.color = ft.colors.GREEN_400
+
+            alfabeto_ordenado = sorted(automata_sin_lambda_convertido.alfabeto)
+            columnas = [ft.DataColumn(ft.Text("Estado"))] + [
+                ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
+            ]
+
+            filas = []
+            for est in sorted(automata_sin_lambda_convertido.estados):
+                prefijo = ""
+                if est == automata_sin_lambda_convertido.estado_inicial:
+                    prefijo += "→ "
+                if est in finales:
+                    prefijo += "* "
+
+                celdas = [ft.DataCell(ft.Text(f"{prefijo}{est}"))]
+                for s in alfabeto_ordenado:
+                    destinos = automata_sin_lambda_convertido.transiciones.get((est, s), set())
+                    celdas.append(ft.DataCell(ft.Text(formatear_conjunto(destinos) if destinos else "∅")))
+
+                filas.append(ft.DataRow(cells=celdas))
+
+            data_table_afn_sin_lambda.columns = columnas
+            data_table_afn_sin_lambda.rows = filas
+        except Exception as err:
+            txt_info_conversion_lambda.value = f"❌ Error durante la conversión: {err}"
+            txt_info_conversion_lambda.color = ft.colors.RED_400
+
+        page.update()
+
     def ejecutar_concatenacion(e):
         c1 = input_cadena_op1.value or ""
         c2 = input_cadena_op2.value or ""
@@ -406,7 +471,7 @@ def main(page: ft.Page):
         page.update()
 
     # -------------------------------------------------------------------------
-    # PESTAÑAS
+    # PESTAÑAS DE LA INTERFAZ
     # -------------------------------------------------------------------------
     tab_definicion = ft.Tab(
         text="Definición y Transiciones",
@@ -497,7 +562,7 @@ def main(page: ft.Page):
     )
 
     tab_cerradura_lambda = ft.Tab(
-        text="Cerradura λ & Sim. Directa",
+        text="2.1 Cerradura λ & Sim. Directa",
         icon=ft.icons.ACCOUNT_TREE,
         content=ft.Container(
             padding=15,
@@ -542,6 +607,34 @@ def main(page: ft.Page):
         ),
     )
 
+    tab_eliminacion_lambda = ft.Tab(
+        text="2.2 AFN sin λ",
+        icon=ft.icons.CLEANING_SERVICES,
+        content=ft.Container(
+            padding=15,
+            content=ft.Column(
+                [
+                    ft.Text("2.2 Conversión de AFN-λ a AFN (Sin transiciones λ)", size=18, weight=ft.FontWeight.BOLD),
+                    ft.ElevatedButton(
+                        "Convertir a AFN sin λ",
+                        icon=ft.icons.TRANSFORM,
+                        on_click=ejecutar_eliminacion_lambda,
+                    ),
+                    txt_info_conversion_lambda,
+                    ft.Divider(),
+                    ft.Text("Tabla de Transiciones del AFN resultante (δ')", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Column(
+                        [data_table_afn_sin_lambda],
+                        scroll=ft.ScrollMode.AUTO,
+                        expand=True,
+                    ),
+                ],
+                spacing=15,
+                scroll=ft.ScrollMode.AUTO,
+            ),
+        ),
+    )
+
     tab_operaciones = ft.Tab(
         text="Operaciones",
         icon=ft.icons.CALCULATE,
@@ -575,6 +668,7 @@ def main(page: ft.Page):
             tab_archivos,
             tab_simulacion,
             tab_cerradura_lambda,
+            tab_eliminacion_lambda,
             tab_operaciones,
         ],
         expand=True,
