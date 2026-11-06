@@ -126,8 +126,11 @@ def main(page: ft.Page):
     # -------------------------------------------------------------------------
     # FILEPICKER CON TRANSFERENCIA DE ARCHIVOS (WEB UPLOAD)
     # -------------------------------------------------------------------------
+    # -------------------------------------------------------------------------
+    # FILEPICKER CON TRANSFERENCIA DE ARCHIVOS (WEB UPLOAD)
+    # -------------------------------------------------------------------------
     def al_cargar_completado(e: ft.FilePickerUploadEvent):
-        """Disparado cuando finaliza la subida al contenedor."""
+        """Se ejecuta una vez que Flet confirma que terminó el Upload."""
         nonlocal automata_actual
         if e.error:
             txt_status_carga.value = f"❌ Error de transferencia: {e.error}"
@@ -135,12 +138,16 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # Encontrar la ruta exacta donde se guardó el archivo
-        ruta_servidor = buscar_archivo_subido(e.file_name)
+        # Ruta directa dentro de la carpeta uploads unificada
+        ruta_servidor = os.path.join(UPLOAD_DIR, e.file_name)
 
         try:
-            if not ruta_servidor:
-                raise FileNotFoundError(f"No se encontró el archivo '{e.file_name}' en ninguna ruta del servidor.")
+            # Si por algún detalle no está ahí, buscamos dentro de /app/uploads/
+            if not os.path.exists(ruta_servidor):
+                ruta_servidor = os.path.join("/app", "uploads", e.file_name)
+
+            if not os.path.exists(ruta_servidor):
+                raise FileNotFoundError(f"No se encontró el archivo '{e.file_name}' en {ruta_servidor}")
 
             automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
             actualizar_vistas_definicion()
@@ -154,11 +161,13 @@ def main(page: ft.Page):
         page.update()
 
     def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
-        """Inicia el envío HTTP del archivo seleccionado."""
+        """Dispara el Upload enviando el archivo a la carpeta configurada."""
         if not e.files or len(e.files) == 0:
             return
 
         archivo = e.files[0]
+        
+        # Generamos la URL de upload firmada usando la clave de Flet
         upload_url = page.get_upload_url(archivo.name, 600)
 
         txt_status_carga.value = f"⏳ Cargando {archivo.name}..."
