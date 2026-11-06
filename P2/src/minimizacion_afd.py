@@ -1,25 +1,20 @@
 from typing import Dict, Set, Tuple, List, Any
 from automata import Automata
 
+# Mapeo de caracteres numéricos a subíndices Unicode
+SUBINDICES = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+
+
+def a_subindice(texto_o_num) -> str:
+    """Convierte cualquier número o texto numérico a sus caracteres subíndices Unicode."""
+    return str(texto_o_num).translate(SUBINDICES)
+
 
 class MinimizadorAFD:
     """
     Módulo de Minimización de AFD implementando el método por rondas y clases 
-    (X0, X1, X2...) según el formato del M. en C. Gabriel Hurtado Avilés.
+    (X₀, X₁, X₂...) según el formato del M. en C. Gabriel Hurtado Avilés.
     """
-
-    # Función auxiliar para convertir números a subíndices Unicode
-    SUBINDICES = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
-
-    def a_subindice(texto_o_num):
-        return str(texto_o_num).translate(SUBINDICES)
-
-    # Ejemplo de uso al registrar clases:
-    # En lugar de: f"X_{contador_clases}"
-    nombre = f"X{a_subindice(contador_clases)}"  # Genera 'X₀', 'X₁', 'X₂', 'X₃'...
-
-    # En lugar de: f"P_{numero_ronda}"
-    particion_nombre = f"P{a_subindice(numero_ronda)}"  # Genera 'P₁', 'P₂', 'P₃'...
 
     @staticmethod
     def obtener_estados_alcanzables(automata: Automata) -> Set[str]:
@@ -55,26 +50,26 @@ class MinimizadorAFD:
         finales = alcanzables.intersection(finales_originales)
         no_finales = alcanzables.difference(finales)
 
-        # Contador global de índices de clase (X_0, X_1, X_2, ...)
+        # Contador global de índices de clase
         contador_clases = 0
 
-        # Diccionario para mapear cada subconjunto congelado (tuple de estados) a su nombre 'X_i'
+        # Mapeo: tuple(estados) -> 'Xᵢ'
         mapeo_clases: Dict[Tuple[str, ...], str] = {}
-        # Diccionario inverso: 'X_i' -> conjunto de estados
+        # Mapeo inverso: 'Xᵢ' -> set(estados)
         definicion_clases: Dict[str, Set[str]] = {}
 
         def registrar_clase(conjunto_estados: Set[str]) -> str:
             nonlocal contador_clases
             tup = tuple(sorted(list(conjunto_estados)))
             if tup not in mapeo_clases:
-                nombre = f"X_{contador_clases}"
+                nombre = f"X{a_subindice(contador_clases)}"
                 contador_clases += 1
                 mapeo_clases[tup] = nombre
                 definicion_clases[nombre] = set(conjunto_estados)
             return mapeo_clases[tup]
 
         # ---------------------------------------------------------------------
-        # PASO 1: Partición Inicial P1 = {X0, X1}
+        # PASO 1: Partición Inicial P₁ = {X₀, X₁}
         # ---------------------------------------------------------------------
         x0_name = registrar_clase(no_finales) if no_finales else None
         x1_name = registrar_clase(finales) if finales else None
@@ -87,7 +82,6 @@ class MinimizadorAFD:
 
         rondas_reporte = []
 
-        # Función auxiliar para saber a qué X_k de la partición actual pertenece un estado
         def obtener_clase_de_estado(estado: str, particion: List[str]) -> str:
             for c_name in particion:
                 if estado in definicion_clases[c_name]:
@@ -104,12 +98,14 @@ class MinimizadorAFD:
             hubo_cambios = False
             nueva_particion = []
 
+            p_nombre_actual = f"P{a_subindice(numero_ronda)}"
+            p_nombre_siguiente = f"P{a_subindice(numero_ronda + 1)}"
+
             detalles_ronda = {
                 "ronda_num": numero_ronda,
-                "particion_nombre": f"P_{numero_ronda}",
+                "particion_nombre": p_nombre_actual,
                 "tablas_clases": [],
-                "divisiones_texto": [],
-                "siguiente_particion_nombre": f"P_{numero_ronda + 1}"
+                "siguiente_particion_nombre": p_nombre_siguiente
             }
 
             for c_name in particion_actual:
@@ -124,7 +120,6 @@ class MinimizadorAFD:
                     })
                     continue
 
-                # Construir filas de la tabla de transiciones y firmas de clases
                 filas_tabla = []
                 agrupacion_firmas: Dict[Tuple[str, ...], List[str]] = {}
 
@@ -152,7 +147,6 @@ class MinimizadorAFD:
                         "firma": firma
                     })
 
-                # Si hay más de una firma distinta en esta clase, se divide
                 subgrupos = list(agrupacion_firmas.values())
 
                 if len(subgrupos) == 1:
@@ -162,7 +156,7 @@ class MinimizadorAFD:
                         "tiene_un_solo_estado": False,
                         "se_divide": False,
                         "filas": filas_tabla,
-                        "mensaje": f"Dentro de {c_name} los renglones son iguales."
+                        "mensaje": f"Dentro de cada clase los renglones son iguales."
                     })
                 else:
                     hubo_cambios = True
@@ -172,14 +166,13 @@ class MinimizadorAFD:
                         nuevas_clases_creadas.append(nueva_c_name)
                         nueva_particion.append(nueva_c_name)
 
-                    # Resaltar cuál clase fue distinta
                     detalles_ronda["tablas_clases"].append({
                         "clase_analizada": c_name,
                         "tiene_un_solo_estado": False,
                         "se_divide": True,
                         "filas": filas_tabla,
                         "subgrupos_creados": nuevas_clases_creadas,
-                        "mensaje": f"El renglón es distinto en {c_name}, así que se divide en: " +
+                        "mensaje": f"Hay tipos de renglón distintos, así que {c_name} se divide en: " +
                                    ", ".join([f"{name} = {{{', '.join(sorted(list(definicion_clases[name])))}}}" for name in nuevas_clases_creadas])
                     })
 
@@ -210,7 +203,6 @@ class MinimizadorAFD:
             if bool(conj_estados.intersection(finales_originales)):
                 nuevos_finales.add(c_name)
 
-            # Tomar un estado representante para mapear transiciones
             rep = sorted(list(conj_estados))[0]
             for simb in alfabeto:
                 destinos = automata_original.transiciones.get((rep, simb), set())
@@ -229,14 +221,15 @@ class MinimizadorAFD:
 
         setattr(afd_minimo, "mapeo_subconjuntos", definicion_clases)
 
+        p1_nombre = f"P{a_subindice(1)}"
         reporte = {
             "p1_inicial": [
                 f"{name} = {{{', '.join(sorted(list(definicion_clases[name])))}}}"
                 for name in [x0_name, x1_name] if name
             ],
-            "p1_nombre": f"P_1 = {{{', '.join([n for n in [x0_name, x1_name] if n])}}}",
+            "p1_nombre": f"{p1_nombre} = {{{', '.join([n for n in [x0_name, x1_name] if n])}}}",
             "rondas": rondas_reporte,
-            "particion_final_nombre": f"P_{numero_ronda}",
+            "particion_final_nombre": f"P{a_subindice(numero_ronda)}",
             "definicion_clases": definicion_clases
         }
 
