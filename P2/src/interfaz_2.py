@@ -51,7 +51,6 @@ def main(page: ft.Page):
             btn_cargar,
             lbl_estado_aut,
         ], spacing=20 ),
-        padding=20
     )
 
     # --- PESTAÑA 2: SIMULADOR ---
