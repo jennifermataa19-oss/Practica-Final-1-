@@ -109,7 +109,18 @@ def main(page: ft.Page):
             page.update()
             return
 
-        ruta_servidor = os.path.join(UPLOAD_DIR, e.file_name)
+        # Buscamos el archivo subido en las posibles ubicaciones de upload
+        ruta_directa = os.path.join(UPLOAD_DIR, e.file_name)
+        ruta_relativa = os.path.join("uploads", e.file_name)
+        
+        if os.path.exists(ruta_directa):
+            ruta_servidor = ruta_directa
+        elif os.path.exists(ruta_relativa):
+            ruta_servidor = ruta_relativa
+        else:
+            # Si Flet guardó el archivo en el directorio raíz de la app
+            ruta_servidor = e.file_name
+
         try:
             automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
             actualizar_vistas_definicion()

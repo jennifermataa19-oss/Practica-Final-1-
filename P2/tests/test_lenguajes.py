@@ -6,7 +6,7 @@ import pytest
 # Agregar el directorio raíz al path de Python para que encuentre 'src'
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from src.lenguajes import (
+from P2.src.parser import (
     obtener_prefijos, obtener_sufijos, obtener_subcadenas,
     generar_cerradura_kleene, generar_cerradura_positiva
 )

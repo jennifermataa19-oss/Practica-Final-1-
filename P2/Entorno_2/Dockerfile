@@ -21,5 +21,5 @@ COPY . .
 # Flet, al no encontrar escritorio, arranca como servidor web.
 ENV FLET_FORCE_WEB_SERVER=true
 ENV FLET_SERVER_PORT=8550
-
+ENV FLET_SERVER_IP=0.0.0.0
 CMD ["python", "src/app.py"]
