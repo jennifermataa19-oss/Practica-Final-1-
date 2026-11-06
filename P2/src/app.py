@@ -567,11 +567,10 @@ def main(page: ft.Page):
         page.update()
 
     def ejecutar_minimizacion_afd(e):
-        """Minimización del AFD usando partición de estados equivalentes (Sección 2.4)."""
+        """Minimización del AFD con el formato del M. en C. Gabriel Hurtado Avilés (Sección 2.4)."""
         nonlocal afd_minimo_convertido
         data_table_afd_minimo.rows = []
 
-        # Si ya convertimos previamente a AFD, usamos ese; si no, usamos el autómata actual
         base_automata = afd_convertido if afd_convertido and afd_convertido.estados else automata_actual
 
         if not base_automata.estados:
@@ -593,29 +592,39 @@ def main(page: ft.Page):
             )
             txt_info_minimizacion.color = ft.colors.GREEN_400
 
-            # 1. Historial de particiones P0, P1, P2...
-            lineas_particiones = []
-            if reporte.get("estados_inalcanzables"):
-                lineas_particiones.append(
-                    f"⚠️ Estados inalcanzables eliminados: {formatear_conjunto(set(reporte['estados_inalcanzables']))}\n"
-                )
-            
-            lineas_particiones.append("=== PROCESO DE PARTICIÓN DE ESTADOS (ALGORITMO DE MOORE) ===")
-            for item in reporte.get("historial_particiones", []):
-                grupos_formatted = [formatear_conjunto(g) for g in item["grupos"]]
-                lineas_particiones.append(f"  • {item['descripcion']}: { {', '.join(grupos_formatted)} }")
+            # Redacción del reporte estilo Gabriel Hurtado
+            lineas = []
+            lineas.append("Paso 1: Partición Inicial")
+            lineas.append("  " + ",   ".join(reporte["p1_inicial"]))
+            lineas.append(f"  {reporte['p1_nombre']}\n")
 
-            txt_particiones_historial.value = "\n".join(lineas_particiones)
+            for ronda in reporte["rondas"]:
+                r_num = ronda["ronda_num"]
+                p_nombre = ronda["particion_nombre"]
+                lineas.append(f"Paso 2, ronda {r_num} (con {p_nombre})")
 
-            # 2. Mapeo de alias M0, M1... a conjuntos equivalentes
-            lineas_alias = ["\n=== EQUIVALENCIA DE ESTADOS EN EL AFD MÍNIMO ==="]
-            for alias, conj in sorted(reporte.get("mapeo_alias", {}).items()):
-                lineas_alias.append(f"  • {alias} = {formatear_conjunto(conj)}")
-            txt_mapeo_minimo.value = "\n".join(lineas_alias)
+                for t_info in ronda["tablas_clases"]:
+                    c_name = t_info["clase_analizada"]
+                    if t_info.get("tiene_un_solo_estado"):
+                        lineas.append(f"  {c_name} tiene un solo estado.")
+                    else:
+                        lineas.append(f"  La tabla de {c_name} es:")
+                        # Formatear la mini tabla
+                        lineas.append(f"    State | Transición | Clase en {p_nombre}")
+                        for f in t_info["filas"]:
+                            est = f["estado"]
+                            t_str = " ".join([f"{k}:{v}" for k, v in f["trans_estados"].items()])
+                            c_str = " ".join([f"{k}:{v}" for k, v in f["trans_clases"].items()])
+                            lineas.append(f"    {est:5} | {t_str:10} | {c_str}")
 
-            # 3. Construcción de la tabla de transiciones final
+                    lineas.append(f"  {t_info['mensaje']}\n")
+
+            lineas.append(f"Paso 4: Autómata Simplificado ({reporte['particion_final_nombre']} = {ronda['particion_nombre']} y terminamos)")
+            txt_particiones_historial.value = "\n".join(lineas)
+
+            # Tabla de transiciones final
             alfabeto_ordenado = sorted(afd_minimo_convertido.alfabeto)
-            columnas = [ft.DataColumn(ft.Text("Estado Mínimo"))] + [
+            columnas = [ft.DataColumn(ft.Text("Clase"))] + [
                 ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
             ]
 
@@ -627,7 +636,8 @@ def main(page: ft.Page):
                 if est in finales:
                     prefijo += "* "
 
-                celdas = [ft.DataCell(ft.Text(f"{prefijo}{est}"))]
+                conj_str = formatear_conjunto(reporte["definicion_clases"][est])
+                celdas = [ft.DataCell(ft.Text(f"{prefijo}{est} = {conj_str}"))]
                 for s in alfabeto_ordenado:
                     destinos = afd_minimo_convertido.transiciones.get((est, s), set())
                     celdas.append(ft.DataCell(ft.Text(formatear_conjunto(destinos) if destinos else "∅")))
@@ -642,7 +652,7 @@ def main(page: ft.Page):
             txt_info_minimizacion.color = ft.colors.RED_400
 
         page.update()
-
+    
     def ejecutar_concatenacion(e):
         c1 = input_cadena_op1.value or ""
         c2 = input_cadena_op2.value or ""

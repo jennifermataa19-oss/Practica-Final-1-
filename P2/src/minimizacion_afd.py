@@ -3,7 +3,10 @@ from automata import Automata
 
 
 class MinimizadorAFD:
-    """Módulo para minimizar un AFD mediante el algoritmo de partición de estados equivalentes."""
+    """
+    Módulo de Minimización de AFD implementando el método por rondas y clases 
+    (X0, X1, X2...) según el formato del M. en C. Gabriel Hurtado Avilés.
+    """
 
     @staticmethod
     def obtener_estados_alcanzables(automata: Automata) -> Set[str]:
@@ -16,7 +19,7 @@ class MinimizadorAFD:
 
         while pila:
             actual = pila.pop()
-            for simbolo in automata.alfabeto:
+            for simbolo in sorted(automata.alfabeto):
                 destinos = automata.transiciones.get((actual, simbolo), set())
                 for dest in destinos:
                     if dest not in visitados:
@@ -27,125 +30,181 @@ class MinimizadorAFD:
 
     @staticmethod
     def minimizar(automata_original: Automata) -> Tuple[Automata, Dict[str, Any]]:
-        """
-        Ejecuta la minimización del AFD.
-        Retorna:
-          - El AFD mínimo resultante.
-          - Un reporte detallado con las particiones P0, P1, P2... para la UI.
-        """
         finales_originales = getattr(
             automata_original,
             "estados_aceptacion",
             getattr(automata_original, "estados_finales", getattr(automata_original, "finales", set())),
         )
 
-        # 1. Conservar solo estados alcanzables
         alcanzables = MinimizadorAFD.obtener_estados_alcanzables(automata_original)
         alfabeto = sorted(list(automata_original.alfabeto))
 
-        finales_alcanzables = alcanzables.intersection(finales_originales)
-        no_finales_alcanzables = alcanzables.difference(finales_alcanzables)
+        finales = alcanzables.intersection(finales_originales)
+        no_finales = alcanzables.difference(finales)
 
-        # 2. Partición Inicial P0
+        # Contador global de índices de clase (X_0, X_1, X_2, ...)
+        contador_clases = 0
+
+        # Diccionario para mapear cada subconjunto congelado (tuple de estados) a su nombre 'X_i'
+        mapeo_clases: Dict[Tuple[str, ...], str] = {}
+        # Diccionario inverso: 'X_i' -> conjunto de estados
+        definicion_clases: Dict[str, Set[str]] = {}
+
+        def registrar_clase(conjunto_estados: Set[str]) -> str:
+            nonlocal contador_clases
+            tup = tuple(sorted(list(conjunto_estados)))
+            if tup not in mapeo_clases:
+                nombre = f"X_{contador_clases}"
+                contador_clases += 1
+                mapeo_clases[tup] = nombre
+                definicion_clases[nombre] = set(conjunto_estados)
+            return mapeo_clases[tup]
+
+        # ---------------------------------------------------------------------
+        # PASO 1: Partición Inicial P1 = {X0, X1}
+        # ---------------------------------------------------------------------
+        x0_name = registrar_clase(no_finales) if no_finales else None
+        x1_name = registrar_clase(finales) if finales else None
+
         particion_actual = []
-        if no_finales_alcanzables:
-            particion_actual.append(sorted(list(no_finales_alcanzables)))
-        if finales_alcanzables:
-            particion_actual.append(sorted(list(finales_alcanzables)))
+        if x0_name:
+            particion_actual.append(x0_name)
+        if x1_name:
+            particion_actual.append(x1_name)
 
-        historial_particiones = []
-        historial_particiones.append({
-            "iteracion": 0,
-            "grupos": [list(g) for g in particion_actual],
-            "descripcion": f"P0 (No Finales vs Finales)"
-        })
+        rondas_reporte = []
 
-        iteracion = 1
-        mantenimiento_cambios = True
+        # Función auxiliar para saber a qué X_k de la partición actual pertenece un estado
+        def obtener_clase_de_estado(estado: str, particion: List[str]) -> str:
+            for c_name in particion:
+                if estado in definicion_clases[c_name]:
+                    return c_name
+            return "?"
 
-        # Map auxiliar: estado -> índice del grupo al que pertenece
-        def obtener_indice_grupo(estado: str, particion: List[List[str]]) -> int:
-            for idx, grupo in enumerate(particion):
-                if estado in grupo:
-                    return idx
-            return -1
+        # ---------------------------------------------------------------------
+        # PASO 2: Rondas de Refinamiento
+        # ---------------------------------------------------------------------
+        numero_ronda = 1
+        hubo_cambios = True
 
-        # 3. Refinamiento iterativo de particiones
-        while mantenimiento_cambios:
+        while hubo_cambios:
+            hubo_cambios = False
             nueva_particion = []
-            mantenimiento_cambios = False
 
-            for grupo in particion_actual:
-                if len(grupo) <= 1:
-                    nueva_particion.append(grupo)
+            detalles_ronda = {
+                "ronda_num": numero_ronda,
+                "particion_nombre": f"P_{numero_ronda}",
+                "tablas_clases": [],
+                "divisiones_texto": [],
+                "siguiente_particion_nombre": f"P_{numero_ronda + 1}"
+            }
+
+            for c_name in particion_actual:
+                estados_grupo = sorted(list(definicion_clases[c_name]))
+
+                if len(estados_grupo) <= 1:
+                    nueva_particion.append(c_name)
+                    detalles_ronda["tablas_clases"].append({
+                        "clase_analizada": c_name,
+                        "tiene_un_solo_estado": True,
+                        "mensaje": f"{c_name} tiene un solo estado: {{{', '.join(estados_grupo)}}}."
+                    })
                     continue
 
-                # Agrupar por firma de transiciones
-                subgrupos: Dict[Tuple[int, ...], List[str]] = {}
-                for est in grupo:
-                    firma = []
-                    for simbolo in alfabeto:
-                        destinos = automata_original.transiciones.get((est, simbolo), set())
-                        dest = list(destinos)[0] if destinos else None
-                        idx_dest = obtener_indice_grupo(dest, particion_actual) if dest else -1
-                        firma.append(idx_dest)
+                # Construir filas de la tabla de transiciones y firmas de clases
+                filas_tabla = []
+                agrupacion_firmas: Dict[Tuple[str, ...], List[str]] = {}
 
-                    firma_tuple = tuple(firma)
-                    if firma_tuple not in subgrupos:
-                        subgrupos[firma_tuple] = []
-                    subgrupos[firma_tuple].append(est)
+                for est in estados_grupo:
+                    trans_estados = {}
+                    trans_clases = {}
 
-                lista_subgrupos = list(subgrupos.values())
-                if len(lista_subgrupos) > 1:
-                    mantenimiento_cambios = True
+                    for simb in alfabeto:
+                        destinos = automata_original.transiciones.get((est, simb), set())
+                        dest = sorted(list(destinos))[0] if destinos else "-"
+                        trans_estados[simb] = dest
+                        
+                        clase_dest = obtener_clase_de_estado(dest, particion_actual) if dest != "-" else "-"
+                        trans_clases[simb] = clase_dest
 
-                nueva_particion.extend(lista_subgrupos)
+                    firma = tuple(trans_clases[simb] for simb in alfabeto)
+                    if firma not in agrupacion_firmas:
+                        agrupacion_firmas[firma] = []
+                    agrupacion_firmas[firma].append(est)
 
-            particion_actual = nueva_particion
-            historial_particiones.append({
-                "iteracion": iteracion,
-                "grupos": [list(g) for g in particion_actual],
-                "descripcion": f"P{iteracion}"
-            })
-            iteracion += 1
+                    filas_tabla.append({
+                        "estado": est,
+                        "trans_estados": trans_estados,
+                        "trans_clases": trans_clases,
+                        "firma": firma
+                    })
 
-            if iteracion > 50:  # Salvaguarda de bucle infinito
+                # Si hay más de una firma distinta en esta clase, se divide
+                subgrupos = list(agrupacion_firmas.values())
+
+                if len(subgrupos) == 1:
+                    nueva_particion.append(c_name)
+                    detalles_ronda["tablas_clases"].append({
+                        "clase_analizada": c_name,
+                        "tiene_un_solo_estado": False,
+                        "se_divide": False,
+                        "filas": filas_tabla,
+                        "mensaje": f"Dentro de {c_name} los renglones son iguales."
+                    })
+                else:
+                    hubo_cambios = True
+                    nuevas_clases_creadas = []
+                    for subg in subgrupos:
+                        nueva_c_name = registrar_clase(set(subg))
+                        nuevas_clases_creadas.append(nueva_c_name)
+                        nueva_particion.append(nueva_c_name)
+
+                    # Resaltar cuál clase fue distinta
+                    detalles_ronda["tablas_clases"].append({
+                        "clase_analizada": c_name,
+                        "tiene_un_solo_estado": False,
+                        "se_divide": True,
+                        "filas": filas_tabla,
+                        "subgrupos_creados": nuevas_clases_creadas,
+                        "mensaje": f"El renglón es distinto en {c_name}, así que se divide en: " +
+                                   ", ".join([f"{name} = {{{', '.join(sorted(list(definicion_clases[name])))}}}" for name in nuevas_clases_creadas])
+                    })
+
+            rondas_reporte.append(detalles_ronda)
+
+            if not hubo_cambios:
                 break
 
-        # 4. Construcción del AFD Mínimo
-        mapa_alias: Dict[Tuple[str, ...], str] = {}
-        mapeo_detalle: Dict[str, Set[str]] = {}
+            particion_actual = nueva_particion
+            numero_ronda += 1
 
-        for idx, grupo in enumerate(sorted(particion_actual)):
-            alias = f"M{idx}"
-            grupo_tuple = tuple(sorted(grupo))
-            mapa_alias[grupo_tuple] = alias
-            mapeo_detalle[alias] = set(grupo)
+            if numero_ronda > 50:
+                break
 
-        nuevos_estados = set(mapeo_detalle.keys())
-        nuevos_finales = set()
+        # ---------------------------------------------------------------------
+        # PASO 4: Autómata Simplificado Resultante
+        # ---------------------------------------------------------------------
+        nuevos_estados = set(particion_actual)
         nuevo_inicial = ""
-
-        # Determinar nuevo estado inicial y finales
-        for alias, conjunto in mapeo_detalle.items():
-            if automata_original.estado_inicial in conjunto:
-                nuevo_inicial = alias
-            if bool(conjunto.intersection(finales_originales)):
-                nuevos_finales.add(alias)
-
-        # Construir nuevas transiciones
+        nuevos_finales = set()
         nuevas_transiciones = {}
-        for alias, conjunto in mapeo_detalle.items():
-            representante = sorted(list(conjunto))[0]
-            for simbolo in alfabeto:
-                destinos = automata_original.transiciones.get((representante, simbolo), set())
+
+        for c_name in particion_actual:
+            conj_estados = definicion_clases[c_name]
+            
+            if automata_original.estado_inicial in conj_estados:
+                nuevo_inicial = c_name
+            if bool(conj_estados.intersection(finales_originales)):
+                nuevos_finales.add(c_name)
+
+            # Tomar un estado representante para mapear transiciones
+            rep = sorted(list(conj_estados))[0]
+            for simb in alfabeto:
+                destinos = automata_original.transiciones.get((rep, simb), set())
                 if destinos:
-                    dest_real = list(destinos)[0]
-                    # Encontrar el alias del grupo destino
-                    for alias_dest, conj_dest in mapeo_detalle.items():
-                        if dest_real in conj_dest:
-                            nuevas_transiciones[(alias, simbolo)] = {alias_dest}
-                            break
+                    dest_real = sorted(list(destinos))[0]
+                    c_dest = obtener_clase_de_estado(dest_real, particion_actual)
+                    nuevas_transiciones[(c_name, simb)] = {c_dest}
 
         afd_minimo = Automata(
             estados=nuevos_estados,
@@ -155,12 +214,17 @@ class MinimizadorAFD:
             transiciones=nuevas_transiciones
         )
 
-        setattr(afd_minimo, "mapeo_subconjuntos", mapeo_detalle)
+        setattr(afd_minimo, "mapeo_subconjuntos", definicion_clases)
 
         reporte = {
-            "estados_inalcanzables": list(set(automata_original.estados).difference(alcanzables)),
-            "historial_particiones": historial_particiones,
-            "mapeo_alias": mapeo_detalle
+            "p1_inicial": [
+                f"{name} = {{{', '.join(sorted(list(definicion_clases[name])))}}}"
+                for name in [x0_name, x1_name] if name
+            ],
+            "p1_nombre": f"P_1 = {{{', '.join([n for n in [x0_name, x1_name] if n])}}}",
+            "rondas": rondas_reporte,
+            "particion_final_nombre": f"P_{numero_ronda}",
+            "definicion_clases": definicion_clases
         }
 
         return afd_minimo, reporte
