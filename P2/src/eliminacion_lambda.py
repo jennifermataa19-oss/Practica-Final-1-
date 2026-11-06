@@ -1,4 +1,4 @@
-from typing import Dict, Set, Tuple
+from typing import Dict, Set, Tuple, Any
 from automata import Automata
 from cerradura_lambda import CerraduraLambdaSimulador
 
@@ -7,14 +7,13 @@ class EliminadorLambda:
     """Módulo para convertir un AFN-λ en un AFN equivalente sin transiciones λ."""
 
     @staticmethod
-    def eliminar_transiciones_lambda(automata_original: Automata) -> Tuple[Automata, Dict[str, Dict[str, Set[str]]]]:
+    def eliminar_transiciones_lambda(automata_original: Automata) -> Tuple[Automata, Dict[str, Any]]:
         """
         Transforma un AFN-λ en un AFN sin λ.
         Retorna:
           - El nuevo autómata (AFN sin λ).
-          - Un diccionario con la memoria del proceso paso a paso para la UI.
+          - Un diccionario detallado con la memoria del proceso paso a paso para la UI/reportes.
         """
-        # Detectar el conjunto de estados finales del autómata original
         finales_originales = getattr(
             automata_original,
             "estados_aceptacion",
@@ -22,33 +21,45 @@ class EliminadorLambda:
         )
 
         nuevos_estados = set(automata_original.estados)
-        nuevo_alfabeto = set(automata_original.alfabeto)  # Alfabeto sin λ
+        nuevo_alfabeto = set(automata_original.alfabeto)  # Alfabeto puros (sin λ)
         nuevo_inicial = automata_original.estado_inicial
         nuevos_finales = set()
         nuevas_transiciones = {}
 
-        # Memoria para reporte/interfaz paso a paso
-        detalles_conversion = {}
+        reporte_pasos = {
+            "cerraduras_individuales": {},
+            "estados_finales_calculo": [],
+            "transiciones_desglose": []
+        }
 
         # 1. Determinar nuevos estados de aceptación
-        for q in nuevos_estados:
+        for q in sorted(nuevos_estados):
             cl_q = CerraduraLambdaSimulador.calcular_cerradura_estado(automata_original, q)
-            if bool(cl_q.intersection(finales_originales)):
+            reporte_pasos["cerraduras_individuales"][q] = cl_q
+            
+            es_final = bool(cl_q.intersection(finales_originales))
+            if es_final:
                 nuevos_finales.add(q)
+            
+            reporte_pasos["estados_finales_calculo"].append({
+                "estado": q,
+                "cl_q": cl_q,
+                "interseccion_F": cl_q.intersection(finales_originales),
+                "es_final": es_final
+            })
 
         # 2. Calcular la nueva función de transición δ'(q, a) = CL(δ(CL(q), a))
         for q in sorted(nuevos_estados):
-            detalles_conversion[q] = {}
-            cl_q = CerraduraLambdaSimulador.calcular_cerradura_estado(automata_original, q)
+            cl_q = reporte_pasos["cerraduras_individuales"][q]
 
             for simbolo in sorted(nuevo_alfabeto):
-                # Paso A: Alcanzables leyendo 'simbolo' desde CL(q)
+                # Subpaso A: Alcanzables leyendo 'simbolo' desde CL(q)
                 alcanzables_directos = set()
                 for est_cl in cl_q:
                     destinos = automata_original.transiciones.get((est_cl, simbolo), set())
                     alcanzables_directos.update(destinos)
 
-                # Paso B: Cerradura Lambda del conjunto alcanzado
+                # Subpaso B: Cerradura Lambda del conjunto alcanzado
                 cl_alcanzados = CerraduraLambdaSimulador.calcular_cerradura_conjunto(
                     automata_original, alcanzables_directos
                 )
@@ -56,11 +67,13 @@ class EliminadorLambda:
                 if cl_alcanzados:
                     nuevas_transiciones[(q, simbolo)] = cl_alcanzados
 
-                detalles_conversion[q][simbolo] = {
+                reporte_pasos["transiciones_desglose"].append({
+                    "estado": q,
+                    "simbolo": simbolo,
                     "cl_origen": cl_q,
                     "alcanzables_directos": alcanzables_directos,
                     "resultado_cl": cl_alcanzados
-                }
+                })
 
         nuevo_automata = Automata(
             estados=nuevos_estados,
@@ -70,4 +83,4 @@ class EliminadorLambda:
             transiciones=nuevas_transiciones
         )
 
-        return nuevo_automata, detalles_conversion
+        return nuevo_automata, reporte_pasos
