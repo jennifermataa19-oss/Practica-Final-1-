@@ -62,7 +62,12 @@ def main(page: ft.Page):
         q_str = f"Q = {{{', '.join(sorted(automata_actual.estados))}}}"
         alphabet_str = f"Σ = {{{', '.join(sorted(automata_actual.alfabeto))}}}"
         q0_str = f"q0 = {automata_actual.estado_inicial}"
-        f_str = f"F = {{{', '.join(sorted(automata_actual.estados_finales))}}}"
+        finales = getattr(
+            automata_actual,
+            "estados_aceptacion",
+            getattr(automata_actual, "estados_finales", getattr(automata_actual, "finales", set())),
+        )
+        f_str = f"F = {{{', '.join(sorted(finales))}}}"
 
         txt_definicion_formal.value = (
             f"Definición Formal:\n• {q_str}\n• {alphabet_str}\n• {q0_str}\n• {f_str}"
@@ -80,7 +85,7 @@ def main(page: ft.Page):
             prefix = ""
             if est == automata_actual.estado_inicial:
                 prefix += "→ "
-            if est in automata_actual.estados_finales:
+            if est in finales:
                 prefix += "* "
 
             celdas.append(ft.DataCell(ft.Text(f"{prefix}{est}")))
