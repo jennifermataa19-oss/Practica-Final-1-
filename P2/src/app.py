@@ -114,7 +114,7 @@ def main(page: ft.Page):
             if os.path.exists(r):
                 return r
 
-        # Búsqueda recursiva dentro de la estructura del proyecto
+        # Búsqueda recursiva
         for root_dir in [UPLOAD_DIR, BASE_DIR]:
             if os.path.exists(root_dir):
                 for root, _, files in os.walk(root_dir):
@@ -153,7 +153,7 @@ def main(page: ft.Page):
         page.update()
 
     def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
-        """Genera el upload usando POST explícito para evitar 'Invalid request'."""
+        """Dispara el upload usando PUT (el estándar de subida en Flet Web)."""
         if not e.files or len(e.files) == 0:
             return
 
@@ -164,12 +164,13 @@ def main(page: ft.Page):
         txt_status_carga.color = ft.colors.BLUE_400
         page.update()
 
+        # Usamos método PUT para evitar el 405 Method Not Allowed
         file_picker_abrir.upload(
             [
                 ft.FilePickerUploadFile(
                     name=archivo.name,
                     upload_url=upload_url,
-                    method="POST",
+                    method="PUT",
                 )
             ]
         )
