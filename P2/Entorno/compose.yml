@@ -10,4 +10,4 @@ services:
       - ../:/app
     ports:
       - "8550:8550"
-    command: python src/interfaz.py
+    command: python src/interfaz_2.py
