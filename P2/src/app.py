@@ -11,11 +11,8 @@ def main(page: ft.Page):
     page.title = "Simulador de Autómatas Finitos - Práctica 2"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 20
-
-    # Carpeta interna dentro del contenedor para alojar las cargas
-    UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
+    UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads"))
     os.makedirs(UPLOAD_DIR, exist_ok=True)
-
     # Autómata activo en la sesión
     automata_actual = Automata()
 
@@ -100,6 +97,7 @@ def main(page: ft.Page):
     # -------------------------------------------------------------------------
     # MANEJO DE ARCHIVOS (WEB UPLOADS)
     # -------------------------------------------------------------------------
+    
     def al_cargar_completado(e: ft.FilePickerUploadEvent):
         """Se ejecuta cuando el archivo finaliza la subida al contenedor."""
         nonlocal automata_actual
@@ -109,33 +107,19 @@ def main(page: ft.Page):
             page.update()
             return
 
-        # Buscamos todas las posibles ubicaciones reales en el contenedor
-        posibles_rutas = [
-            os.path.join(os.getcwd(), "uploads", e.file_name),
-            os.path.join("/app", "uploads", e.file_name),
-            os.path.join("uploads", e.file_name),
-            e.file_name
-        ]
-
-        ruta_encontrada = None
-        for ruta in posibles_rutas:
-            if os.path.exists(ruta):
-                ruta_encontrada = ruta
-                break
-
-        if not ruta_encontrada:
-            # Si no está directamente con ese nombre, busca dentro de la carpeta uploads el archivo más reciente
-            carpeta_uploads = os.path.join(os.getcwd(), "uploads")
-            if os.path.exists(carpeta_uploads):
-                archivos = [os.path.join(carpeta_uploads, f) for f in os.listdir(carpeta_uploads)]
-                if archivos:
-                    ruta_encontrada = max(archivos, key=os.path.getmtime)
+        # Busca el archivo directamente en la carpeta UPLOAD_DIR
+        ruta_servidor = os.path.join(UPLOAD_DIR, e.file_name)
 
         try:
-            if not ruta_encontrada:
-                raise FileNotFoundError(f"No se encontró el archivo subido '{e.file_name}' en el servidor.")
+            if not os.path.exists(ruta_servidor):
+                # Respaldo: si Flet lo guardó en src/uploads por error
+                ruta_backup = os.path.join(os.path.dirname(__file__), "uploads", e.file_name)
+                if os.path.exists(ruta_backup):
+                    ruta_servidor = ruta_backup
+                else:
+                    raise FileNotFoundError(f"No se encontró el archivo subido en '{ruta_servidor}'")
 
-            automata_actual = AutomataParser.cargar_desde_archivo(ruta_encontrada)
+            automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
             actualizar_vistas_definicion()
             txt_status_carga.value = f"✅ Autómata cargado exitosamente: {e.file_name}"
             txt_status_carga.color = ft.colors.GREEN_400
@@ -144,6 +128,7 @@ def main(page: ft.Page):
             txt_status_carga.color = ft.colors.RED_400
 
         page.update()
+
     def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
         """Inicia el envío HTTP del archivo seleccionado."""
         if not e.files or len(e.files) == 0:
@@ -379,7 +364,8 @@ if __name__ == "__main__":
     ft.app(
         target=main,
         view=ft.AppView.WEB_BROWSER,
-        upload_dir="uploads",
+        upload_dir=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads")),
+        secret_key="mi_clave_secreta_super_segura",
         host="0.0.0.0",
         port=8550
     )
