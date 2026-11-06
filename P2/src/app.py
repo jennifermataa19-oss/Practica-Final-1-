@@ -424,20 +424,29 @@ def main(page: ft.Page):
         )
 
     def al_guardar_archivo(e: ft.FilePickerResultEvent):
-        if not e.path:
-            return
-
         try:
-            ruta = e.path
-            if ruta.endswith(".json"):
-                AutomataExporter.a_json(automata_actual, ruta)
-            elif ruta.endswith((".jff", ".xml")):
-                AutomataExporter.a_jff_xml(automata_actual, ruta)
-            else:
-                ruta += ".json"
-                AutomataExporter.a_json(automata_actual, ruta)
+            nombre_sugerido = "automata_exportado.json"
+            ruta_temporal = os.path.join(UPLOAD_DIR, nombre_sugerido)
 
-            txt_status_carga.value = f"✅ Archivo guardado en: {ruta}"
+            # Generar el archivo temporalmente en el servidor
+            AutomataExporter.a_json(automata_actual, ruta_temporal)
+
+            if e.path:
+                # Modo Escritorio / Local
+                ruta_destino = e.path
+                if ruta_destino.endswith((".jff", ".xml")):
+                    AutomataExporter.a_jff_xml(automata_actual, ruta_destino)
+                else:
+                    if not ruta_destino.endswith(".json"):
+                        ruta_destino += ".json"
+                    AutomataExporter.a_json(automata_actual, ruta_destino)
+                txt_status_carga.value = f"✅ Archivo guardado en: {ruta_destino}"
+            else:
+                # Modo Web (Navegador): Fuerza la descarga directa al equipo
+                url_descarga = page.get_upload_url(nombre_sugerido, 600)
+                page.launch_url(url_descarga)
+                txt_status_carga.value = "✅ Archivo descargado en tu navegador exitosamente."
+
             txt_status_carga.color = ft.colors.GREEN_400
         except Exception as err:
             txt_status_carga.value = f"❌ Error al guardar archivo: {err}"
