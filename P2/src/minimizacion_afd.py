@@ -8,6 +8,19 @@ class MinimizadorAFD:
     (X0, X1, X2...) según el formato del M. en C. Gabriel Hurtado Avilés.
     """
 
+    # Función auxiliar para convertir números a subíndices Unicode
+    SUBINDICES = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
+
+    def a_subindice(texto_o_num):
+        return str(texto_o_num).translate(SUBINDICES)
+
+    # Ejemplo de uso al registrar clases:
+    # En lugar de: f"X_{contador_clases}"
+    nombre = f"X{a_subindice(contador_clases)}"  # Genera 'X₀', 'X₁', 'X₂', 'X₃'...
+
+    # En lugar de: f"P_{numero_ronda}"
+    particion_nombre = f"P{a_subindice(numero_ronda)}"  # Genera 'P₁', 'P₂', 'P₃'...
+
     @staticmethod
     def obtener_estados_alcanzables(automata: Automata) -> Set[str]:
         """Elimina estados inalcanzables desde el estado inicial."""
