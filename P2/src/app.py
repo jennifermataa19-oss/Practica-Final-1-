@@ -385,7 +385,6 @@ if __name__ == "__main__":
         target=main,
         view=ft.AppView.WEB_BROWSER,
         upload_dir=os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "uploads")),
-        secret_key="mi_clave_secreta_super_segura",
         host="0.0.0.0",
         port=8550
     )
