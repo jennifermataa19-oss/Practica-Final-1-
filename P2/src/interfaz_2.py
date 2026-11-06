@@ -4,8 +4,8 @@ from gestor_archivos import GestorArchivos
 
 def main(page: ft.Page):
     page.title = "Simulador de Autómatas - Práctica 2"
-    page.window_width = 900
-    page.window_height = 700
+    page.window.width = 900
+    page.window.height = 700
     page.theme_mode = ft.ThemeMode.DARK
 
     # Instancia de nuestro núcleo
