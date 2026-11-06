@@ -1,15 +1,12 @@
 services:
-  py311:
+  py312:
     build:
       context: ..
-      dockerfile: Entorno_2/Dockerfile
-    container_name: tc_p1_py311
-    volumes:
-      - ..:/app
+      dockerfile: Entorno/Dockerfile
+      args:
+        PYTHON_VERSION: "3.12"
+    container_name: tc_p2_simulador
     ports:
       - "8550:8550"
-    environment:
-      - FLET_FORCE_WEB_SERVER=true
-      - FLET_SERVER_PORT=8550
-      - FLET_SERVER_IP=0.0.0.0
-    command: python src/interfaz_2.py
+    volumes:
+      - ..:/app

@@ -1,0 +1,17 @@
+# Entornos virtuales
+venv/
+env/
+.venv/
+
+# Cache de Python
+__pycache__/
+*.py[cod]
+
+# Archivos de Flet / Build
+.flet/
+dist/
+build/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
