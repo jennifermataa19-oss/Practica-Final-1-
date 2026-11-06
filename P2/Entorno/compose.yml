@@ -9,26 +9,3 @@ services:
     volumes:
         - ../:/app
     command: python src/interfaz_2.py
-
-  py312:
-    build:
-      context: ..
-      dockerfile: entorno/Dockerfile
-      args:
-        PYTHON_VERSION: "3.12"
-    container_name: tc_p2_py312
-    ports:
-      - "8550:8550"
-    volumes:
-       - ../:/app
-    command: python src/interfaz_2.py
-  py313:
-    build:
-      context: ..
-      dockerfile: entorno/Dockerfile
-      args:
-        PYTHON_VERSION: "3.13"
-    container_name: tc_p2_py313
-    volumes:
-      - ../:/app
-    command: python src/interfaz_2.py
