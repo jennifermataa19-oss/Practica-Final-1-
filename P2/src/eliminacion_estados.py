@@ -24,7 +24,7 @@ class ConversorAutomataARegex:
             for simb in alfabeto:
                 destinos = automata.transiciones.get((est, simb), set())
                 if len(destinos) != 1:
-                    return False, f"El estado '{est}' con el símbolo '{simbolo}' tiene {len(destinos)} destinos (debe ser exactamente 1)."
+                    return False, f"El estado '{est}' con el símbolo '{simb}' tiene {len(destinos)} destinos (debe ser exactamente 1)."
 
         return True, "El autómata es un AFD determinista puro válido."
 
