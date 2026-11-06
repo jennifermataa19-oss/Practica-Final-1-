@@ -122,17 +122,17 @@ def main(page: ft.Page):
         page.update()
 
     def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
-        """Inicia el envío del archivo desde el cliente web hacia Docker."""
+        """Inicia el envío del archivo usando la ruta de upload del servidor web."""
         if e.files and len(e.files) > 0:
+            archivo = e.files[0]
             file_picker_abrir.upload(
                 [
                     ft.FilePickerUploadFile(
-                        e.files[0].name,
-                        upload_url=page.get_upload_url(e.files[0].name, 600),
+                        archivo.name,
+                        upload_url=f"/upload/{archivo.name}",
                     )
                 ]
             )
-
     def al_guardar_archivo(e: ft.FilePickerResultEvent):
         if not e.path:
             return
