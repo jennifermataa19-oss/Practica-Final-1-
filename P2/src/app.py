@@ -79,6 +79,16 @@ def main(page: ft.Page):
         columns=[ft.DataColumn(ft.Text("Estado"))],
         rows=[],
     )
+    data_table_pasos_eliminacion = ft.DataTable(
+        columns=[
+            ft.DataColumn(ft.Text("Estado (q)")),
+            ft.DataColumn(ft.Text("Símbolo (a)")),
+            ft.DataColumn(ft.Text("CL(q)")),
+            ft.DataColumn(ft.Text("δ(CL(q), a)")),
+            ft.DataColumn(ft.Text("δ'(q, a) = CL(...)")),
+        ],
+        rows=[],
+    )
 
     # Pestaña 6: Sección 2.3 - Conversión AFN a AFD (Subconjuntos)
     txt_info_afd = ft.Text("", size=14, selectable=True)
@@ -97,7 +107,6 @@ def main(page: ft.Page):
     # FUNCIONES AUXILIARES
     # -------------------------------------------------------------------------
     def obtener_finales(automata_target=None):
-        """Obtiene el conjunto de estados de aceptación sin importar el nombre del atributo."""
         target = automata_target if automata_target else automata_actual
         return getattr(
             target,
@@ -110,7 +119,6 @@ def main(page: ft.Page):
         )
 
     def actualizar_vistas_definicion():
-        """Actualiza la definición formal, la tabla de transiciones y el dropdown."""
         finales = obtener_finales()
 
         if not automata_actual.estados:
@@ -165,7 +173,6 @@ def main(page: ft.Page):
         page.update()
 
     def limpiar_resultados():
-        """Limpia resultados de simulaciones y conversiones previas."""
         list_pasos_simulacion.controls.clear()
         txt_resultado_simulacion.value = ""
         txt_resultado_cerradura.value = ""
@@ -173,6 +180,7 @@ def main(page: ft.Page):
         data_table_pasos_directos.rows = []
         txt_info_conversion_lambda.value = ""
         data_table_afn_sin_lambda.rows = []
+        data_table_pasos_eliminacion.rows = []
         txt_info_afd.value = ""
         txt_mapeo_subconjuntos.value = ""
         data_table_afd.rows = []
@@ -398,8 +406,10 @@ def main(page: ft.Page):
         page.update()
 
     def ejecutar_eliminacion_lambda(e):
+        """Conversión de AFN-λ a AFN equivalente sin λ con desglose paso a paso (Sección 2.2)."""
         nonlocal automata_sin_lambda_convertido
         data_table_afn_sin_lambda.rows = []
+        data_table_pasos_eliminacion.rows = []
 
         if not automata_actual.estados:
             txt_info_conversion_lambda.value = "⚠️ Primero carga o define un autómata."
@@ -408,7 +418,7 @@ def main(page: ft.Page):
             return
 
         try:
-            automata_sin_lambda_convertido, _ = EliminadorLambda.eliminar_transiciones_lambda(
+            automata_sin_lambda_convertido, reporte = EliminadorLambda.eliminar_transiciones_lambda(
                 automata_actual
             )
 
@@ -419,16 +429,17 @@ def main(page: ft.Page):
                 f"• Q = {formatear_conjunto(automata_sin_lambda_convertido.estados)}\n"
                 f"• Σ = {formatear_conjunto(automata_sin_lambda_convertido.alfabeto)}\n"
                 f"• q0 = {automata_sin_lambda_convertido.estado_inicial}\n"
-                f"• F = {formatear_conjunto(finales)}"
+                f"• F' = {formatear_conjunto(finales)}"
             )
             txt_info_conversion_lambda.color = ft.colors.GREEN_400
 
+            # 1. Llenar tabla de transiciones final sin lambda
             alfabeto_ordenado = sorted(automata_sin_lambda_convertido.alfabeto)
             columnas = [ft.DataColumn(ft.Text("Estado"))] + [
                 ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
             ]
 
-            filas = []
+            filas_finales = []
             for est in sorted(automata_sin_lambda_convertido.estados):
                 prefijo = ""
                 if est == automata_sin_lambda_convertido.estado_inicial:
@@ -441,10 +452,27 @@ def main(page: ft.Page):
                     destinos = automata_sin_lambda_convertido.transiciones.get((est, s), set())
                     celdas.append(ft.DataCell(ft.Text(formatear_conjunto(destinos) if destinos else "∅")))
 
-                filas.append(ft.DataRow(cells=celdas))
+                filas_finales.append(ft.DataRow(cells=celdas))
 
             data_table_afn_sin_lambda.columns = columnas
-            data_table_afn_sin_lambda.rows = filas
+            data_table_afn_sin_lambda.rows = filas_finales
+
+            # 2. Llenar tabla del desglose del procedimiento
+            filas_desglose = []
+            for item in reporte.get("transiciones_desglose", []):
+                filas_desglose.append(
+                    ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Text(item["estado"])),
+                            ft.DataCell(ft.Text(item["simbolo"])),
+                            ft.DataCell(ft.Text(formatear_conjunto(item["cl_origen"]))),
+                            ft.DataCell(ft.Text(formatear_conjunto(item["alcanzables_directos"]) if item["alcanzables_directos"] else "∅")),
+                            ft.DataCell(ft.Text(formatear_conjunto(item["resultado_cl"]) if item["resultado_cl"] else "∅")),
+                        ]
+                    )
+                )
+            data_table_pasos_eliminacion.rows = filas_desglose
+
         except Exception as err:
             txt_info_conversion_lambda.value = f"❌ Error durante la conversión: {err}"
             txt_info_conversion_lambda.color = ft.colors.RED_400
@@ -452,7 +480,6 @@ def main(page: ft.Page):
         page.update()
 
     def ejecutar_conversion_afd(e):
-        """Conversión por algoritmo de subconjuntos (Sección 2.3)."""
         nonlocal afd_convertido
         data_table_afd.rows = []
 
@@ -475,7 +502,6 @@ def main(page: ft.Page):
             )
             txt_info_afd.color = ft.colors.GREEN_400
 
-            # Mostrar Mapeo de Alias -> Subconjuntos
             mapeo = getattr(afd_convertido, "mapeo_subconjuntos", {})
             lineas_mapeo = [
                 f"{alias} = {formatear_conjunto(conj)}"
@@ -483,7 +509,6 @@ def main(page: ft.Page):
             ]
             txt_mapeo_subconjuntos.value = "Equivalencia de subconjuntos:\n" + "\n".join(lineas_mapeo)
 
-            # Construir tabla de transiciones del AFD
             alfabeto_ordenado = sorted(afd_convertido.alfabeto)
             columnas = [ft.DataColumn(ft.Text("Estado AFD"))] + [
                 ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
@@ -687,7 +712,14 @@ def main(page: ft.Page):
                     ),
                     txt_info_conversion_lambda,
                     ft.Divider(),
-                    ft.Text("Tabla de Transiciones del AFN resultante (δ')", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Text("Desglose del cálculo de δ'(q, a) = CL(δ(CL(q), a))", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Column(
+                        [data_table_pasos_eliminacion],
+                        scroll=ft.ScrollMode.AUTO,
+                        expand=True,
+                    ),
+                    ft.Divider(),
+                    ft.Text("Tabla de Transiciones Resultante (δ')", size=16, weight=ft.FontWeight.BOLD),
                     ft.Column(
                         [data_table_afn_sin_lambda],
                         scroll=ft.ScrollMode.AUTO,

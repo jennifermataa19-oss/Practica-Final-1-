@@ -21,7 +21,7 @@ class EliminadorLambda:
         )
 
         nuevos_estados = set(automata_original.estados)
-        nuevo_alfabeto = set(automata_original.alfabeto)  # Alfabeto puros (sin λ)
+        nuevo_alfabeto = set(automata_original.alfabeto)  # Alfabeto sin λ
         nuevo_inicial = automata_original.estado_inicial
         nuevos_finales = set()
         nuevas_transiciones = {}
@@ -32,7 +32,7 @@ class EliminadorLambda:
             "transiciones_desglose": []
         }
 
-        # 1. Determinar nuevos estados de aceptación
+        # 1. Determinar nuevos estados de aceptación: q es final si CL(q) ∩ F_orig ≠ ∅
         for q in sorted(nuevos_estados):
             cl_q = CerraduraLambdaSimulador.calcular_cerradura_estado(automata_original, q)
             reporte_pasos["cerraduras_individuales"][q] = cl_q
