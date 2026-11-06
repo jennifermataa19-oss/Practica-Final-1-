@@ -1,6 +1,6 @@
 # Un solo Dockerfile para las tres versiones. El numero de version
 # llega desde compose.yml como argumento de construccion.
-ARG PYTHON_VERSION=3.12
+ARG PYTHON_VERSION=3.11
 FROM python:${PYTHON_VERSION}-slim
 
 # El entorno virtual va en /opt/venv, fuera de /app. Colocar
