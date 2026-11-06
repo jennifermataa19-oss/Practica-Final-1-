@@ -354,8 +354,8 @@ def main(page: ft.Page):
         try:
             ruta_destino = e.path
 
-            # Guardar reporte de validación en lote (.txt)
-            if ruta_destino.endswith(".txt") or (not ruta_destino.endswith(".json") and not ruta_destino.endswith(".jff")):
+            # Si el usuario viene de presionar 'Guardar Informe (.txt)'
+            if resultados_lote_actual and (ruta_destino.endswith(".txt") or not ruta_destino.endswith((".json", ".jff", ".xml"))):
                 if not ruta_destino.endswith(".txt"):
                     ruta_destino += ".txt"
 
@@ -365,24 +365,29 @@ def main(page: ft.Page):
                 with open(ruta_destino, "w", encoding="utf-8") as f:
                     f.write(contenido_reporte)
 
-                txt_status_lote.value = f"✅ Informe guardado en: {ruta_destino}"
+                txt_status_lote.value = f"✅ Informe guardado exitosamente en: {ruta_destino}"
                 txt_status_lote.color = ft.colors.GREEN_400
             else:
-                # Guardar autómata
+                # Guardar estructura del autómata
                 if ruta_destino.endswith(".json"):
                     AutomataExporter.a_json(automata_actual, ruta_destino)
                 elif ruta_destino.endswith(".jff") or ruta_destino.endswith(".xml"):
                     AutomataExporter.a_jff_xml(automata_actual, ruta_destino)
+                else:
+                    ruta_destino += ".json"
+                    AutomataExporter.a_json(automata_actual, ruta_destino)
 
-                txt_status_carga.value = f"✅ Autómata guardado en: {ruta_destino}"
+                txt_status_carga.value = f"✅ Archivo guardado en: {ruta_destino}"
                 txt_status_carga.color = ft.colors.GREEN_400
 
         except Exception as err:
             txt_status_carga.value = f"❌ Error al guardar archivo: {err}"
             txt_status_carga.color = ft.colors.RED_400
+            txt_status_lote.value = f"❌ Error al guardar informe: {err}"
+            txt_status_lote.color = ft.colors.RED_400
 
         page.update()
-
+    
     file_picker_abrir = ft.FilePicker(
         on_result=al_seleccionar_archivo,
         on_upload=al_cargar_completado,
