@@ -138,7 +138,7 @@ def main(page: ft.Page):
         ]
         if automata_actual.estados:
             dropdown_estado_cerradura.value = sorted(list(automata_actual.estados))[0]
-
+        print("TRANSICIONES:", automata_actual.transiciones)
         data_table_transiciones.update()
         page.update()
     # -------------------------------------------------------------------------
