@@ -2,7 +2,7 @@ services:
   py312:
     build:
       context: ..
-      dockerfile: Entorno/Dockerfile
+      dockerfile: Entorno_2/Dockerfile
       args:
         PYTHON_VERSION: "3.12"
     container_name: tc_p2_simulador
