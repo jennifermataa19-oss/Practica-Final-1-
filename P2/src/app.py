@@ -20,12 +20,10 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 20
 
-    # Carpeta unificada en la raíz del proyecto para alojar las subidas
     BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # Autómatas activos en la sesión
     automata_actual = Automata()
     automata_sin_lambda_convertido = None
     afd_convertido = None
@@ -33,7 +31,6 @@ def main(page: ft.Page):
     # -------------------------------------------------------------------------
     # COMPONENTES DE INTERFAZ
     # -------------------------------------------------------------------------
-    # Pestaña 1: Definición y Transiciones
     txt_status_carga = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
     txt_definicion_formal = ft.Text(
         "No hay autómata cargado.", size=14, selectable=True
@@ -43,7 +40,6 @@ def main(page: ft.Page):
         rows=[],
     )
 
-    # Pestaña 3: Simulación estándar
     input_cadena_simular = ft.TextField(
         label="Cadena a simular (ej. 0101)", width=300
     )
@@ -52,7 +48,6 @@ def main(page: ft.Page):
         expand=1, spacing=5, padding=10, auto_scroll=True, height=200
     )
 
-    # Pestaña 4: Sección 2.1 - Cerradura λ y simulación directa AFN-λ
     dropdown_estado_cerradura = ft.Dropdown(
         label="Seleccionar Estado", width=200, options=[]
     )
@@ -73,24 +68,33 @@ def main(page: ft.Page):
         rows=[],
     )
 
-    # Pestaña 5: Sección 2.2 - Eliminación de transiciones λ
+    # -------------------------------------------------------------------------
+    # COMPONENTES SECCIÓN 2.2: ELIMINACIÓN DE TRANSICIONES LAMBDA
+    # -------------------------------------------------------------------------
     txt_info_conversion_lambda = ft.Text("", size=14, selectable=True)
-    data_table_afn_sin_lambda = ft.DataTable(
-        columns=[ft.DataColumn(ft.Text("Estado"))],
-        rows=[],
-    )
+    
+    # Texto de paso a paso ordenado para 2.2
+    txt_explicacion_paso_a_paso_22 = ft.Text("", size=13, selectable=True, font_family="Consolas")
+
     data_table_pasos_eliminacion = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("Estado (q)")),
             ft.DataColumn(ft.Text("Símbolo (a)")),
-            ft.DataColumn(ft.Text("CL(q)")),
-            ft.DataColumn(ft.Text("δ(CL(q), a)")),
-            ft.DataColumn(ft.Text("δ'(q, a) = CL(...)")),
+            ft.DataColumn(ft.Text("1. CL(q)")),
+            ft.DataColumn(ft.Text("2. δ(CL(q), a)")),
+            ft.DataColumn(ft.Text("3. δ'(q, a) = CL(...)")),
         ],
         rows=[],
     )
 
-    # Pestaña 6: Sección 2.3 - Conversión AFN a AFD (Subconjuntos)
+    data_table_afn_sin_lambda = ft.DataTable(
+        columns=[ft.DataColumn(ft.Text("Estado"))],
+        rows=[],
+    )
+
+    # -------------------------------------------------------------------------
+    # COMPONENTES SECCIÓN 2.3: CONVERSIÓN A AFD
+    # -------------------------------------------------------------------------
     txt_info_afd = ft.Text("", size=14, selectable=True)
     txt_mapeo_subconjuntos = ft.Text("", size=13, selectable=True, font_family="Consolas")
     data_table_afd = ft.DataTable(
@@ -98,7 +102,6 @@ def main(page: ft.Page):
         rows=[],
     )
 
-    # Pestaña 7: Operaciones sobre lenguajes
     input_cadena_op1 = ft.TextField(label="Cadena 1", width=200)
     input_cadena_op2 = ft.TextField(label="Cadena 2", width=200)
     txt_resultado_operacion = ft.Text("", size=15, selectable=True)
@@ -179,6 +182,7 @@ def main(page: ft.Page):
         txt_resultado_simulacion_directa.value = ""
         data_table_pasos_directos.rows = []
         txt_info_conversion_lambda.value = ""
+        txt_explicacion_paso_a_paso_22.value = ""
         data_table_afn_sin_lambda.rows = []
         data_table_pasos_eliminacion.rows = []
         txt_info_afd.value = ""
@@ -406,7 +410,7 @@ def main(page: ft.Page):
         page.update()
 
     def ejecutar_eliminacion_lambda(e):
-        """Conversión de AFN-λ a AFN equivalente sin λ con desglose paso a paso (Sección 2.2)."""
+        """Conversión de AFN-λ a AFN sin λ con explicaciones formales paso a paso (Sección 2.2)."""
         nonlocal automata_sin_lambda_convertido
         data_table_afn_sin_lambda.rows = []
         data_table_pasos_eliminacion.rows = []
@@ -433,7 +437,52 @@ def main(page: ft.Page):
             )
             txt_info_conversion_lambda.color = ft.colors.GREEN_400
 
-            # 1. Llenar tabla de transiciones final sin lambda
+            # -----------------------------------------------------------------
+            # CONSTRUCCIÓN DEL PASO A PASO EXPLICADO (PASO 1 Y PASO 2)
+            # -----------------------------------------------------------------
+            lineas_pasos = []
+            
+            lineas_pasos.append("=== PASO 1: CERRADURAS LAMBDA CL(q) ===")
+            for q, cl in sorted(reporte["cerraduras_individuales"].items()):
+                lineas_pasos.append(f"  • CL({q}) = {formatear_conjunto(cl)}")
+            
+            lineas_pasos.append("\n=== PASO 2: DETERMINACIÓN DE ESTADOS FINALES (F') ===")
+            lineas_pasos.append(f"  Estados finales originales F = {formatear_conjunto(reporte['finales_originales'])}")
+            lineas_pasos.append("  Un estado q ∈ F' si CL(q) ∩ F ≠ ∅:")
+            
+            for item in reporte["estados_finales_calculo"]:
+                q = item["estado"]
+                cl_str = formatear_conjunto(item["cl_q"])
+                inter_str = formatear_conjunto(item["interseccion_F"]) if item["interseccion_F"] else "∅"
+                veredicto = "✅ Pertenece a F'" if item["es_final"] else "❌ No pertenece a F'"
+                lineas_pasos.append(f"  • CL({q}) = {cl_str} ∩ F = {inter_str}  --->  {veredicto}")
+
+            lineas_pasos.append("\n=== PASO 3: CÁLCULO DE LA FUNCIÓN DE TRANSICIÓN δ'(q, a) ===")
+            lineas_pasos.append("  Fórmula: δ'(q, a) = CL( δ( CL(q), a ) )")
+
+            txt_explicacion_paso_a_paso_22.value = "\n".join(lineas_pasos)
+
+            # -----------------------------------------------------------------
+            # TABLA DETALLADA DEL PASO 3
+            # -----------------------------------------------------------------
+            filas_desglose = []
+            for item in reporte.get("transiciones_desglose", []):
+                filas_desglose.append(
+                    ft.DataRow(
+                        cells=[
+                            ft.DataCell(ft.Text(item["estado"])),
+                            ft.DataCell(ft.Text(item["simbolo"])),
+                            ft.DataCell(ft.Text(formatear_conjunto(item["cl_origen"]))),
+                            ft.DataCell(ft.Text(formatear_conjunto(item["alcanzables_directos"]) if item["alcanzables_directos"] else "∅")),
+                            ft.DataCell(ft.Text(formatear_conjunto(item["resultado_cl"]) if item["resultado_cl"] else "∅")),
+                        ]
+                    )
+                )
+            data_table_pasos_eliminacion.rows = filas_desglose
+
+            # -----------------------------------------------------------------
+            # TABLA DE TRANSICIONES RESULTANTE DEL AFN SIN LAMBDA
+            # -----------------------------------------------------------------
             alfabeto_ordenado = sorted(automata_sin_lambda_convertido.alfabeto)
             columnas = [ft.DataColumn(ft.Text("Estado"))] + [
                 ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
@@ -456,22 +505,6 @@ def main(page: ft.Page):
 
             data_table_afn_sin_lambda.columns = columnas
             data_table_afn_sin_lambda.rows = filas_finales
-
-            # 2. Llenar tabla del desglose del procedimiento
-            filas_desglose = []
-            for item in reporte.get("transiciones_desglose", []):
-                filas_desglose.append(
-                    ft.DataRow(
-                        cells=[
-                            ft.DataCell(ft.Text(item["estado"])),
-                            ft.DataCell(ft.Text(item["simbolo"])),
-                            ft.DataCell(ft.Text(formatear_conjunto(item["cl_origen"]))),
-                            ft.DataCell(ft.Text(formatear_conjunto(item["alcanzables_directos"]) if item["alcanzables_directos"] else "∅")),
-                            ft.DataCell(ft.Text(formatear_conjunto(item["resultado_cl"]) if item["resultado_cl"] else "∅")),
-                        ]
-                    )
-                )
-            data_table_pasos_eliminacion.rows = filas_desglose
 
         except Exception as err:
             txt_info_conversion_lambda.value = f"❌ Error durante la conversión: {err}"
@@ -712,7 +745,10 @@ def main(page: ft.Page):
                     ),
                     txt_info_conversion_lambda,
                     ft.Divider(),
-                    ft.Text("Desglose del cálculo de δ'(q, a) = CL(δ(CL(q), a))", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Text("Procedimiento Detallado Paso a Paso:", size=16, weight=ft.FontWeight.BOLD),
+                    txt_explicacion_paso_a_paso_22,
+                    ft.Divider(),
+                    ft.Text("Desglose Matrimonial de Transiciones: δ'(q, a) = CL(δ(CL(q), a))", size=16, weight=ft.FontWeight.BOLD),
                     ft.Column(
                         [data_table_pasos_eliminacion],
                         scroll=ft.ScrollMode.AUTO,

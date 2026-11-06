@@ -12,7 +12,7 @@ class EliminadorLambda:
         Transforma un AFN-λ en un AFN sin λ.
         Retorna:
           - El nuevo autómata (AFN sin λ).
-          - Un diccionario detallado con la memoria del proceso paso a paso para la UI/reportes.
+          - Un diccionario detallado con el paso a paso estructurado para la UI/reportes.
         """
         finales_originales = getattr(
             automata_original,
@@ -21,45 +21,51 @@ class EliminadorLambda:
         )
 
         nuevos_estados = set(automata_original.estados)
-        nuevo_alfabeto = set(automata_original.alfabeto)  # Alfabeto sin λ
+        nuevo_alfabeto = set(automata_original.alfabeto)  # Alfabeto puros (sin λ)
         nuevo_inicial = automata_original.estado_inicial
         nuevos_finales = set()
         nuevas_transiciones = {}
 
         reporte_pasos = {
             "cerraduras_individuales": {},
+            "finales_originales": finales_originales,
             "estados_finales_calculo": [],
             "transiciones_desglose": []
         }
 
-        # 1. Determinar nuevos estados de aceptación: q es final si CL(q) ∩ F_orig ≠ ∅
+        # ---------------------------------------------------------------------
+        # PASO 1 & 2: Cerraduras Lambda individuales y Nuevos Estados Finales (F')
+        # ---------------------------------------------------------------------
         for q in sorted(nuevos_estados):
             cl_q = CerraduraLambdaSimulador.calcular_cerradura_estado(automata_original, q)
             reporte_pasos["cerraduras_individuales"][q] = cl_q
-            
-            es_final = bool(cl_q.intersection(finales_originales))
+
+            interseccion = cl_q.intersection(finales_originales)
+            es_final = bool(interseccion)
             if es_final:
                 nuevos_finales.add(q)
-            
+
             reporte_pasos["estados_finales_calculo"].append({
                 "estado": q,
                 "cl_q": cl_q,
-                "interseccion_F": cl_q.intersection(finales_originales),
+                "interseccion_F": interseccion,
                 "es_final": es_final
             })
 
-        # 2. Calcular la nueva función de transición δ'(q, a) = CL(δ(CL(q), a))
+        # ---------------------------------------------------------------------
+        # PASO 3: Nueva Función de Transición δ'(q, a) = CL(δ(CL(q), a))
+        # ---------------------------------------------------------------------
         for q in sorted(nuevos_estados):
             cl_q = reporte_pasos["cerraduras_individuales"][q]
 
             for simbolo in sorted(nuevo_alfabeto):
-                # Subpaso A: Alcanzables leyendo 'simbolo' desde CL(q)
+                # Subpaso 3.1: Alcanzables directos leyendo 'simbolo' desde CL(q)
                 alcanzables_directos = set()
                 for est_cl in cl_q:
                     destinos = automata_original.transiciones.get((est_cl, simbolo), set())
                     alcanzables_directos.update(destinos)
 
-                # Subpaso B: Cerradura Lambda del conjunto alcanzado
+                # Subpaso 3.2: Cerradura Lambda del conjunto alcanzado
                 cl_alcanzados = CerraduraLambdaSimulador.calcular_cerradura_conjunto(
                     automata_original, alcanzables_directos
                 )
