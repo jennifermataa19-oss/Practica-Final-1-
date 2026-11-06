@@ -2,6 +2,7 @@ import xml.etree.ElementTree as ET
 import json
 from automata import Automata
 
+
 class AutomataParser:
     @staticmethod
     def cargar_desde_archivo(ruta_archivo):
@@ -33,7 +34,7 @@ class AutomataParser:
         # 1. Extraer estados
         for state_node in automaton_node.findall('state'):
             s_id = state_node.get('id')
-            s_name = state_node.get('name', f"q{s_id}")
+            s_name = state_node.get('name') or f"q{s_id}"
             
             estados.add(s_name)
             mapa_id_nombre[s_id] = s_name
@@ -48,22 +49,34 @@ class AutomataParser:
         transiciones = {}
 
         for trans_node in automaton_node.findall('transition'):
-            from_id = trans_node.find('from').text
-            to_id = trans_node.find('to').text
+            from_node = trans_node.find('from')
+            to_node = trans_node.find('to')
+
+            if from_node is None or to_node is None:
+                continue
+
+            from_id = from_node.text
+            to_id = to_node.text
             read_node = trans_node.find('read')
             
-            simbolo = read_node.text if (read_node is not None and read_node.text) else ''
+            simbolo = read_node.text.strip() if (read_node is not None and read_node.text) else ''
 
             origen = mapa_id_nombre.get(from_id)
             destino = mapa_id_nombre.get(to_id)
 
+            if not origen or not destino:
+                continue
+
             if simbolo != '' and simbolo != 'λ':
                 alfabeto.add(simbolo)
 
-            clave = (origen, simbolo)
-            if clave not in transiciones:
-                transiciones[clave] = set()
-            transiciones[clave].add(destino)
+            # Estructura en formato de diccionario anidado: {origen: {simbolo: {destinos}}}
+            if origen not in transiciones:
+                transiciones[origen] = {}
+            if simbolo not in transiciones[origen]:
+                transiciones[origen][simbolo] = set()
+            
+            transiciones[origen][simbolo].add(destino)
 
         return Automata(
             estados=estados,
@@ -102,10 +115,12 @@ class AutomataParser:
             simbolo = t['simbolo']
             destino = t['destino']
 
-            clave = (origen, simbolo)
-            if clave not in transiciones:
-                transiciones[clave] = set()
-            transiciones[clave].add(destino)
+            if origen not in transiciones:
+                transiciones[origen] = {}
+            if simbolo not in transiciones[origen]:
+                transiciones[origen][simbolo] = set()
+
+            transiciones[origen][simbolo].add(destino)
 
         return Automata(
             estados=estados,
