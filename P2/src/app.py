@@ -11,6 +11,10 @@ from afn_a_afd import ConvertidorSubconjuntos
 from minimizacion_afd import MinimizadorAFD
 from validador_lote import ValidadorLote
 
+# Importaciones de la Práctica 4 (Ejercicio 2)
+from regex_parser import RegexParser, RegexSyntaxError
+from thompson import ConstructorThompson
+
 
 def formatear_conjunto(conjunto):
     """Devuelve un conjunto como texto ordenado: {q0, q1}."""
@@ -18,7 +22,7 @@ def formatear_conjunto(conjunto):
 
 
 def main(page: ft.Page):
-    page.title = "Simulador de Autómatas Finitos - Práctica 3"
+    page.title = "Simulador de Autómatas Finitos y Expresiones Regulares - Práctica 3 & 4"
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 20
 
@@ -32,35 +36,26 @@ def main(page: ft.Page):
     afd_minimo_convertido = None
     resultados_lote_actual = []
     nombre_archivo_lote_actual = ""
+    afn_thompson_generado = None
 
     # -------------------------------------------------------------------------
-    # COMPONENTES DE INTERFAZ
+    # COMPONENTES PESTAÑA DEFINICIÓN Y VISTAS GENERALES
     # -------------------------------------------------------------------------
     txt_status_carga = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
-    txt_definicion_formal = ft.Text(
-        "No hay autómata cargado.", size=14, selectable=True
-    )
+    txt_definicion_formal = ft.Text("No hay autómata cargado.", size=14, selectable=True)
     data_table_transiciones = ft.DataTable(
         columns=[ft.DataColumn(ft.Text("Estado"))],
         rows=[],
     )
 
-    input_cadena_simular = ft.TextField(
-        label="Cadena a simular (ej. 0101)", width=300
-    )
+    input_cadena_simular = ft.TextField(label="Cadena a simular (ej. 0101)", width=300)
     txt_resultado_simulacion = ft.Text("", size=16, weight=ft.FontWeight.BOLD)
-    list_pasos_simulacion = ft.ListView(
-        expand=1, spacing=5, padding=10, auto_scroll=True, height=200
-    )
+    list_pasos_simulacion = ft.ListView(expand=1, spacing=5, padding=10, auto_scroll=True, height=200)
 
-    dropdown_estado_cerradura = ft.Dropdown(
-        label="Seleccionar Estado", width=200, options=[]
-    )
+    dropdown_estado_cerradura = ft.Dropdown(label="Seleccionar Estado", width=200, options=[])
     txt_resultado_cerradura = ft.Text("", size=15, weight=ft.FontWeight.BOLD)
 
-    input_cadena_directa = ft.TextField(
-        label="Cadena a simular en AFN-λ", width=300
-    )
+    input_cadena_directa = ft.TextField(label="Cadena a simular en AFN-λ", width=300)
     txt_resultado_simulacion_directa = ft.Text("", size=16, weight=ft.FontWeight.BOLD)
     data_table_pasos_directos = ft.DataTable(
         columns=[
@@ -86,26 +81,17 @@ def main(page: ft.Page):
         ],
         rows=[],
     )
-    data_table_afn_sin_lambda = ft.DataTable(
-        columns=[ft.DataColumn(ft.Text("Estado"))],
-        rows=[],
-    )
+    data_table_afn_sin_lambda = ft.DataTable(columns=[ft.DataColumn(ft.Text("Estado"))], rows=[])
 
     # Componentes Sección 2.3
     txt_info_afd = ft.Text("", size=14, selectable=True)
     txt_mapeo_subconjuntos = ft.Text("", size=13, selectable=True, font_family="Consolas")
-    data_table_afd = ft.DataTable(
-        columns=[ft.DataColumn(ft.Text("Estado AFD"))],
-        rows=[],
-    )
+    data_table_afd = ft.DataTable(columns=[ft.DataColumn(ft.Text("Estado AFD"))], rows=[])
 
     # Componentes Sección 2.4
     txt_info_minimizacion = ft.Text("", size=14, selectable=True)
     txt_particiones_historial = ft.Text("", size=13, selectable=True, font_family="Consolas")
-    data_table_afd_minimo = ft.DataTable(
-        columns=[ft.DataColumn(ft.Text("Clase"))],
-        rows=[],
-    )
+    data_table_afd_minimo = ft.DataTable(columns=[ft.DataColumn(ft.Text("Clase"))], rows=[])
 
     # Componentes Sección 2.5
     txt_status_lote = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
@@ -117,6 +103,23 @@ def main(page: ft.Page):
             ft.DataColumn(ft.Text("Estados Activos Finales")),
         ],
         rows=[],
+    )
+
+    # -------------------------------------------------------------------------
+    # COMPONENTES PRÁCTICA 4 (EJERCICIO 2: ER -> AFN-λ)
+    # -------------------------------------------------------------------------
+    input_regex = ft.TextField(
+        label="Expresión Regular (ej. (a|b)*abb)",
+        width=400,
+        hint_text="Operadores válidos: |, +, *, (), ."
+    )
+    txt_status_regex = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
+    txt_pasos_thompson = ft.Text("", size=13, selectable=True, font_family="Consolas")
+    data_table_thompson = ft.DataTable(columns=[ft.DataColumn(ft.Text("Estado"))], rows=[])
+    btn_cargar_en_p3 = ft.ElevatedButton(
+        "Cargar AFN-λ en la Práctica 3",
+        icon=ft.icons.PLAY_FOR_WORK,
+        disabled=True
     )
 
     input_cadena_op1 = ft.TextField(label="Cadena 1", width=200)
@@ -131,11 +134,7 @@ def main(page: ft.Page):
         return getattr(
             target,
             "estados_aceptacion",
-            getattr(
-                target,
-                "estados_finales",
-                getattr(target, "finales", set()),
-            ),
+            getattr(target, "estados_finales", getattr(target, "finales", set())),
         )
 
     def actualizar_vistas_definicion():
@@ -184,9 +183,7 @@ def main(page: ft.Page):
         data_table_transiciones.rows = filas
 
         estados_ordenados = sorted(automata_actual.estados)
-        dropdown_estado_cerradura.options = [
-            ft.dropdown.Option(est) for est in estados_ordenados
-        ]
+        dropdown_estado_cerradura.options = [ft.dropdown.Option(est) for est in estados_ordenados]
         if estados_ordenados:
             dropdown_estado_cerradura.value = estados_ordenados[0]
 
@@ -214,6 +211,104 @@ def main(page: ft.Page):
         btn_guardar_reporte_lote.disabled = True
         resultados_lote_actual = []
         nombre_archivo_lote_actual = ""
+
+    # -------------------------------------------------------------------------
+    # MANEJADORES DE PRÁCTICA 4: CONSTRUCCIÓN DE THOMPSON
+    # -------------------------------------------------------------------------
+    def ejecutar_construccion_thompson(e):
+        nonlocal afn_thompson_generado
+        patron = input_regex.value.strip() if input_regex.value else ""
+
+        if not patron:
+            txt_status_regex.value = "⚠️ Ingresa una expresión regular."
+            txt_status_regex.color = ft.colors.ORANGE_400
+            page.update()
+            return
+
+        try:
+            # 1. Parsear la expresión regular
+            ast, patron_formateado = RegexParser.parse(patron)
+
+            # 2. Construir AFN-λ por Thompson
+            constructor = ConstructorThompson()
+            afn_thompson_generado, historial = constructor.construir(ast)
+
+            txt_status_regex.value = (
+                f"✅ Expresión VÁLIDA: '{patron}'\n"
+                f"• Estados creados: {len(afn_thompson_generado.estados)}\n"
+                f"• Alfabeto Σ: {formatear_conjunto(afn_thompson_generado.alfabeto)}\n"
+                f"• Estado Inicial: {afn_thompson_generado.estado_inicial}\n"
+                f"• Estado Final: {formatear_conjunto(afn_thompson_generado.estados_aceptacion)}"
+            )
+            txt_status_regex.color = ft.colors.GREEN_400
+
+            # 3. Mostrar historial paso a paso de Thompson
+            lineas = [f"=== CONSTRUCCIÓN DE THOMPSON PASO A PASO ==="]
+            for i, paso in enumerate(historial, 1):
+                lineas.append(f"Paso {i}: {paso['operacion']}")
+                lineas.append(f"  • sub-inicial: {paso['estado_inicial']} | sub-final: {paso['estado_final']}")
+
+            txt_pasos_thompson.value = "\n".join(lineas)
+
+            # 4. Mostrar la tabla de transiciones del AFN-λ resultante
+            alfabeto_ordenado = sorted(afn_thompson_generado.alfabeto.union({"λ"}))
+            columnas = [ft.DataColumn(ft.Text("Estado"))] + [ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado]
+
+            filas = []
+            finales = afn_thompson_generado.estados_aceptacion
+            for est in sorted(afn_thompson_generado.estados, key=lambda x: int(x[1:]) if x[1:].isdigit() else x):
+                prefijo = ""
+                if est == afn_thompson_generado.estado_inicial:
+                    prefijo += "→ "
+                if est in finales:
+                    prefijo += "* "
+
+                celdas = [ft.DataCell(ft.Text(f"{prefijo}{est}"))]
+                for s in alfabeto_ordenado:
+                    destinos = afn_thompson_generado.transiciones.get((est, s), set())
+                    celdas.append(ft.DataCell(ft.Text(formatear_conjunto(destinos) if destinos else "∅")))
+
+                filas.append(ft.DataRow(cells=celdas))
+
+            data_table_thompson.columns = columnas
+            data_table_thompson.rows = filas
+            btn_cargar_en_p3.disabled = False
+
+        except RegexSyntaxError as err:
+            # Resaltar la posición exacta del error
+            marcador = " " * err.posicion + "^"
+            txt_status_regex.value = (
+                f"❌ ERROR SINTÁCTICO en la posición {err.posicion}:\n"
+                f"  {patron}\n"
+                f"  {marcador}\n"
+                f"Mensaje: {err.mensaje}"
+            )
+            txt_status_regex.color = ft.colors.RED_400
+            txt_pasos_thompson.value = ""
+            data_table_thompson.rows = []
+            btn_cargar_en_p3.disabled = True
+        except Exception as err:
+            txt_status_regex.value = f"❌ Error insospechado: {err}"
+            txt_status_regex.color = ft.colors.RED_400
+            btn_cargar_en_p3.disabled = True
+
+        page.update()
+
+    def enviar_afn_thompson_a_p3(e):
+        nonlocal automata_actual
+        if not afn_thompson_generado:
+            return
+
+        automata_actual = afn_thompson_generado
+        limpiar_resultados()
+        actualizar_vistas_definicion()
+
+        txt_status_carga.value = f"✅ AFN-λ de Thompson cargado exitosamente en el sistema general."
+        txt_status_carga.color = ft.colors.GREEN_400
+        tabs.selected_index = 0
+        page.update()
+
+    btn_cargar_en_p3.on_click = enviar_afn_thompson_a_p3
 
     # -------------------------------------------------------------------------
     # MANEJO DE ARCHIVOS Y REPORTES
@@ -252,9 +347,7 @@ def main(page: ft.Page):
 
         try:
             if not ruta_servidor:
-                raise FileNotFoundError(
-                    f"No se encontró el archivo '{e.file_name}' en el servidor."
-                )
+                raise FileNotFoundError(f"No se encontró el archivo '{e.file_name}' en el servidor.")
 
             if e.file_name.endswith((".jff", ".xml", ".json")):
                 automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
@@ -285,9 +378,7 @@ def main(page: ft.Page):
             contenido = f.read()
 
         nombre_archivo_lote_actual = nombre_archivo
-        resultados_lote_actual = ValidadorLote.validar_cadenas_desde_texto(
-            automata_actual, contenido
-        )
+        resultados_lote_actual = ValidadorLote.validar_cadenas_desde_texto(automata_actual, contenido)
 
         filas = []
         aceptadas = 0
@@ -328,9 +419,7 @@ def main(page: ft.Page):
             nombre_informe = "informe_validacion_cadenas.txt"
             ruta_informe = os.path.join(UPLOAD_DIR, nombre_informe)
 
-            contenido = ValidadorLote.generar_reporte_texto(
-                nombre_archivo_lote_actual, resultados_lote_actual
-            )
+            contenido = ValidadorLote.generar_reporte_texto(nombre_archivo_lote_actual, resultados_lote_actual)
 
             with open(ruta_informe, "w", encoding="utf-8") as f:
                 f.write(contenido)
@@ -362,13 +451,7 @@ def main(page: ft.Page):
         page.update()
 
         file_picker_abrir.upload(
-            [
-                ft.FilePickerUploadFile(
-                    name=archivo.name,
-                    upload_url=upload_url,
-                    method="PUT",
-                )
-            ]
+            [ft.FilePickerUploadFile(name=archivo.name, upload_url=upload_url, method="PUT")]
         )
 
     def al_guardar_archivo(e: ft.FilePickerResultEvent):
@@ -393,17 +476,14 @@ def main(page: ft.Page):
 
         page.update()
 
-    file_picker_abrir = ft.FilePicker(
-        on_result=al_seleccionar_archivo,
-        on_upload=al_cargar_completado,
-    )
+    file_picker_abrir = ft.FilePicker(on_result=al_seleccionar_archivo, on_upload=al_cargar_completado)
     file_picker_guardar = ft.FilePicker(on_result=al_guardar_archivo)
 
     page.overlay.append(file_picker_abrir)
     page.overlay.append(file_picker_guardar)
 
     # -------------------------------------------------------------------------
-    # MANEJADORES DE EVENTOS
+    # MANEJADORES DE EVENTOS PESTAÑAS 2.1 A 2.4
     # -------------------------------------------------------------------------
     def texto_de_paso(paso):
         if not isinstance(paso, dict):
@@ -439,9 +519,7 @@ def main(page: ft.Page):
             return
 
         for paso in traza:
-            list_pasos_simulacion.controls.append(
-                ft.Text(texto_de_paso(paso), size=13, font_family="Consolas")
-            )
+            list_pasos_simulacion.controls.append(ft.Text(texto_de_paso(paso), size=13, font_family="Consolas"))
 
         if es_valida:
             txt_resultado_simulacion.value = f"🎉 ¡CADENA ACEPTADA! ('{cadena}')"
@@ -461,12 +539,8 @@ def main(page: ft.Page):
             return
 
         try:
-            cerradura = CerraduraLambdaSimulador.calcular_cerradura_estado(
-                automata_actual, estado_sel
-            )
-            txt_resultado_cerradura.value = (
-                f"CL({estado_sel}) = {formatear_conjunto(cerradura)}"
-            )
+            cerradura = CerraduraLambdaSimulador.calcular_cerradura_estado(automata_actual, estado_sel)
+            txt_resultado_cerradura.value = f"CL({estado_sel}) = {formatear_conjunto(cerradura)}"
             txt_resultado_cerradura.color = ft.colors.GREEN_400
         except Exception as err:
             txt_resultado_cerradura.value = f"❌ Error: {err}"
@@ -485,9 +559,7 @@ def main(page: ft.Page):
             return
 
         try:
-            es_valida, historial = CerraduraLambdaSimulador.simular_directo_paso_a_paso(
-                automata_actual, cadena
-            )
+            es_valida, historial = CerraduraLambdaSimulador.simular_directo_paso_a_paso(automata_actual, cadena)
         except Exception as err:
             txt_resultado_simulacion_directa.value = f"❌ Error durante la simulación: {err}"
             txt_resultado_simulacion_directa.color = ft.colors.RED_400
@@ -530,10 +602,7 @@ def main(page: ft.Page):
             return
 
         try:
-            automata_sin_lambda_convertido, reporte = EliminadorLambda.eliminar_transiciones_lambda(
-                automata_actual
-            )
-
+            automata_sin_lambda_convertido, reporte = EliminadorLambda.eliminar_transiciones_lambda(automata_actual)
             finales = obtener_finales(automata_sin_lambda_convertido)
 
             txt_info_conversion_lambda.value = (
@@ -548,10 +617,10 @@ def main(page: ft.Page):
             lineas_pasos = ["=== PASO 1: CERRADURAS LAMBDA CL(q) ==="]
             for q, cl in sorted(reporte["cerraduras_individuales"].items()):
                 lineas_pasos.append(f"  • CL({q}) = {formatear_conjunto(cl)}")
-            
+
             lineas_pasos.append("\n=== PASO 2: DETERMINACIÓN DE ESTADOS FINALES (F') ===")
             lineas_pasos.append(f"  Estados finales originales F = {formatear_conjunto(reporte['finales_originales'])}")
-            
+
             for item in reporte["estados_finales_calculo"]:
                 q = item["estado"]
                 cl_str = formatear_conjunto(item["cl_q"])
@@ -580,9 +649,7 @@ def main(page: ft.Page):
             data_table_pasos_eliminacion.rows = filas_desglose
 
             alfabeto_ordenado = sorted(automata_sin_lambda_convertido.alfabeto)
-            columnas = [ft.DataColumn(ft.Text("Estado"))] + [
-                ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
-            ]
+            columnas = [ft.DataColumn(ft.Text("Estado"))] + [ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado]
 
             filas_finales = []
             for est in sorted(automata_sin_lambda_convertido.estados):
@@ -632,16 +699,11 @@ def main(page: ft.Page):
             txt_info_afd.color = ft.colors.GREEN_400
 
             mapeo = getattr(afd_convertido, "mapeo_subconjuntos", {})
-            lineas_mapeo = [
-                f"{alias} = {formatear_conjunto(conj)}"
-                for alias, conj in sorted(mapeo.items())
-            ]
+            lineas_mapeo = [f"{alias} = {formatear_conjunto(conj)}" for alias, conj in sorted(mapeo.items())]
             txt_mapeo_subconjuntos.value = "Equivalencia de subconjuntos:\n" + "\n".join(lineas_mapeo)
 
             alfabeto_ordenado = sorted(afd_convertido.alfabeto)
-            columnas = [ft.DataColumn(ft.Text("Estado AFD"))] + [
-                ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
-            ]
+            columnas = [ft.DataColumn(ft.Text("Estado AFD"))] + [ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado]
 
             filas = []
             for est in sorted(afd_convertido.estados):
@@ -720,9 +782,7 @@ def main(page: ft.Page):
             txt_particiones_historial.value = "\n".join(lineas)
 
             alfabeto_ordenado = sorted(afd_minimo_convertido.alfabeto)
-            columnas = [ft.DataColumn(ft.Text("Clase"))] + [
-                ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
-            ]
+            columnas = [ft.DataColumn(ft.Text("Clase"))] + [ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado]
 
             filas = []
             for est in sorted(afd_minimo_convertido.estados):
@@ -786,13 +846,43 @@ def main(page: ft.Page):
                     txt_definicion_formal,
                     ft.Divider(),
                     ft.Text("Tabla de Transiciones (δ)", size=16, weight=ft.FontWeight.BOLD),
-                    ft.Column(
-                        [data_table_transiciones],
-                        scroll=ft.ScrollMode.AUTO,
-                        expand=True,
-                    ),
+                    ft.Column([data_table_transiciones], scroll=ft.ScrollMode.AUTO, expand=True),
                 ],
                 spacing=15,
+            ),
+        ),
+    )
+
+    tab_regex_thompson = ft.Tab(
+        text="P4 Expresión Regular",
+        icon=ft.icons.CODE,
+        content=ft.Container(
+            padding=15,
+            content=ft.Column(
+                [
+                    ft.Text("P4 Ejercicio 2: De Expresión Regular a AFN-λ (Thompson)", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Row(
+                        [
+                            input_regex,
+                            ft.ElevatedButton(
+                                "Construir AFN-λ",
+                                icon=ft.icons.AUTO_AWESOME,
+                                on_click=ejecutar_construccion_thompson,
+                            ),
+                            btn_cargar_en_p3,
+                        ],
+                        spacing=15,
+                    ),
+                    txt_status_regex,
+                    ft.Divider(),
+                    ft.Text("Construcción del Autómata por Thompson Paso a Paso:", size=16, weight=ft.FontWeight.BOLD),
+                    txt_pasos_thompson,
+                    ft.Divider(),
+                    ft.Text("Tabla de Transiciones del AFN-λ Resultante", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Column([data_table_thompson], scroll=ft.ScrollMode.AUTO, expand=True),
+                ],
+                spacing=15,
+                scroll=ft.ScrollMode.AUTO,
             ),
         ),
     )
@@ -845,11 +935,7 @@ def main(page: ft.Page):
                     ft.Row(
                         [
                             input_cadena_simular,
-                            ft.ElevatedButton(
-                                "Simular",
-                                icon=ft.icons.PLAY_ARROW,
-                                on_click=ejecutar_simulacion,
-                            ),
+                            ft.ElevatedButton("Simular", icon=ft.icons.PLAY_ARROW, on_click=ejecutar_simulacion),
                         ],
                         spacing=15,
                     ),
@@ -897,11 +983,7 @@ def main(page: ft.Page):
                         spacing=15,
                     ),
                     txt_resultado_simulacion_directa,
-                    ft.Column(
-                        [data_table_pasos_directos],
-                        scroll=ft.ScrollMode.AUTO,
-                        expand=True,
-                    ),
+                    ft.Column([data_table_pasos_directos], scroll=ft.ScrollMode.AUTO, expand=True),
                 ],
                 spacing=15,
                 scroll=ft.ScrollMode.AUTO,
@@ -917,29 +999,17 @@ def main(page: ft.Page):
             content=ft.Column(
                 [
                     ft.Text("2.2 Conversión de AFN-λ a AFN (Sin transiciones λ)", size=18, weight=ft.FontWeight.BOLD),
-                    ft.ElevatedButton(
-                        "Convertir a AFN sin λ",
-                        icon=ft.icons.TRANSFORM,
-                        on_click=ejecutar_eliminacion_lambda,
-                    ),
+                    ft.ElevatedButton("Convertir a AFN sin λ", icon=ft.icons.TRANSFORM, on_click=ejecutar_eliminacion_lambda),
                     txt_info_conversion_lambda,
                     ft.Divider(),
                     ft.Text("Procedimiento Detallado Paso a Paso:", size=16, weight=ft.FontWeight.BOLD),
                     txt_explicacion_paso_a_paso_22,
                     ft.Divider(),
                     ft.Text("Desglose Matrimonial de Transiciones: δ'(q, a) = CL(δ(CL(q), a))", size=16, weight=ft.FontWeight.BOLD),
-                    ft.Column(
-                        [data_table_pasos_eliminacion],
-                        scroll=ft.ScrollMode.AUTO,
-                        expand=True,
-                    ),
+                    ft.Column([data_table_pasos_eliminacion], scroll=ft.ScrollMode.AUTO, expand=True),
                     ft.Divider(),
                     ft.Text("Tabla de Transiciones Resultante (δ')", size=16, weight=ft.FontWeight.BOLD),
-                    ft.Column(
-                        [data_table_afn_sin_lambda],
-                        scroll=ft.ScrollMode.AUTO,
-                        expand=True,
-                    ),
+                    ft.Column([data_table_afn_sin_lambda], scroll=ft.ScrollMode.AUTO, expand=True),
                 ],
                 spacing=15,
                 scroll=ft.ScrollMode.AUTO,
@@ -955,21 +1025,13 @@ def main(page: ft.Page):
             content=ft.Column(
                 [
                     ft.Text("2.3 Conversión de AFN a AFD (Construcción por Subconjuntos)", size=18, weight=ft.FontWeight.BOLD),
-                    ft.ElevatedButton(
-                        "Convertir a AFD",
-                        icon=ft.icons.AUTO_FIX_HIGH,
-                        on_click=ejecutar_conversion_afd,
-                    ),
+                    ft.ElevatedButton("Convertir a AFD", icon=ft.icons.AUTO_FIX_HIGH, on_click=ejecutar_conversion_afd),
                     txt_info_afd,
                     ft.Divider(),
                     txt_mapeo_subconjuntos,
                     ft.Divider(),
                     ft.Text("Tabla de Transiciones del AFD Resultante", size=16, weight=ft.FontWeight.BOLD),
-                    ft.Column(
-                        [data_table_afd],
-                        scroll=ft.ScrollMode.AUTO,
-                        expand=True,
-                    ),
+                    ft.Column([data_table_afd], scroll=ft.ScrollMode.AUTO, expand=True),
                 ],
                 spacing=15,
                 scroll=ft.ScrollMode.AUTO,
@@ -985,21 +1047,13 @@ def main(page: ft.Page):
             content=ft.Column(
                 [
                     ft.Text("2.4 Minimización de AFD (Algoritmo de Partición)", size=18, weight=ft.FontWeight.BOLD),
-                    ft.ElevatedButton(
-                        "Minimizar AFD",
-                        icon=ft.icons.COMPRESS,
-                        on_click=ejecutar_minimizacion_afd,
-                    ),
+                    ft.ElevatedButton("Minimizar AFD", icon=ft.icons.COMPRESS, on_click=ejecutar_minimizacion_afd),
                     txt_info_minimizacion,
                     ft.Divider(),
                     txt_particiones_historial,
                     ft.Divider(),
                     ft.Text("Tabla de Transiciones del AFD Mínimo", size=16, weight=ft.FontWeight.BOLD),
-                    ft.Column(
-                        [data_table_afd_minimo],
-                        scroll=ft.ScrollMode.AUTO,
-                        expand=True,
-                    ),
+                    ft.Column([data_table_afd_minimo], scroll=ft.ScrollMode.AUTO, expand=True),
                 ],
                 spacing=15,
                 scroll=ft.ScrollMode.AUTO,
@@ -1032,11 +1086,7 @@ def main(page: ft.Page):
                     txt_status_lote,
                     ft.Divider(),
                     ft.Text("Resultados de la Evaluación Masiva:", size=16, weight=ft.FontWeight.BOLD),
-                    ft.Column(
-                        [data_table_lote],
-                        scroll=ft.ScrollMode.AUTO,
-                        expand=True,
-                    ),
+                    ft.Column([data_table_lote], scroll=ft.ScrollMode.AUTO, expand=True),
                 ],
                 spacing=15,
                 scroll=ft.ScrollMode.AUTO,
@@ -1070,10 +1120,11 @@ def main(page: ft.Page):
     )
 
     tabs = ft.Tabs(
-        selected_index=0,
+        selected_index=1,
         animation_duration=300,
         tabs=[
             tab_definicion,
+            tab_regex_thompson,
             tab_archivos,
             tab_simulacion,
             tab_cerradura_lambda,
