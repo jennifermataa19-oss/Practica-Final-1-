@@ -8,6 +8,7 @@ from operaciones import OperacionesLenguaje
 from cerradura_lambda import CerraduraLambdaSimulador
 from eliminacion_lambda import EliminadorLambda
 from afn_a_afd import ConvertidorSubconjuntos
+from minimizacion_afd import MinimizadorAFD
 
 
 def formatear_conjunto(conjunto):
@@ -27,6 +28,7 @@ def main(page: ft.Page):
     automata_actual = Automata()
     automata_sin_lambda_convertido = None
     afd_convertido = None
+    afd_minimo_convertido = None
 
     # -------------------------------------------------------------------------
     # COMPONENTES DE INTERFAZ
@@ -68,14 +70,9 @@ def main(page: ft.Page):
         rows=[],
     )
 
-    # -------------------------------------------------------------------------
-    # COMPONENTES SECCIÓN 2.2: ELIMINACIÓN DE TRANSICIONES LAMBDA
-    # -------------------------------------------------------------------------
+    # Componentes Sección 2.2
     txt_info_conversion_lambda = ft.Text("", size=14, selectable=True)
-    
-    # Texto de paso a paso ordenado para 2.2
     txt_explicacion_paso_a_paso_22 = ft.Text("", size=13, selectable=True, font_family="Consolas")
-
     data_table_pasos_eliminacion = ft.DataTable(
         columns=[
             ft.DataColumn(ft.Text("Estado (q)")),
@@ -86,19 +83,27 @@ def main(page: ft.Page):
         ],
         rows=[],
     )
-
     data_table_afn_sin_lambda = ft.DataTable(
         columns=[ft.DataColumn(ft.Text("Estado"))],
         rows=[],
     )
 
-    # -------------------------------------------------------------------------
-    # COMPONENTES SECCIÓN 2.3: CONVERSIÓN A AFD
-    # -------------------------------------------------------------------------
+    # Componentes Sección 2.3
     txt_info_afd = ft.Text("", size=14, selectable=True)
     txt_mapeo_subconjuntos = ft.Text("", size=13, selectable=True, font_family="Consolas")
     data_table_afd = ft.DataTable(
         columns=[ft.DataColumn(ft.Text("Estado AFD"))],
+        rows=[],
+    )
+
+    # -------------------------------------------------------------------------
+    # COMPONENTES SECCIÓN 2.4: MINIMIZACIÓN DE AFD
+    # -------------------------------------------------------------------------
+    txt_info_minimizacion = ft.Text("", size=14, selectable=True)
+    txt_particiones_historial = ft.Text("", size=13, selectable=True, font_family="Consolas")
+    txt_mapeo_minimo = ft.Text("", size=13, selectable=True, font_family="Consolas")
+    data_table_afd_minimo = ft.DataTable(
+        columns=[ft.DataColumn(ft.Text("Estado Mínimo"))],
         rows=[],
     )
 
@@ -188,6 +193,10 @@ def main(page: ft.Page):
         txt_info_afd.value = ""
         txt_mapeo_subconjuntos.value = ""
         data_table_afd.rows = []
+        txt_info_minimizacion.value = ""
+        txt_particiones_historial.value = ""
+        txt_mapeo_minimo.value = ""
+        data_table_afd_minimo.rows = []
 
     # -------------------------------------------------------------------------
     # MANEJO DE ARCHIVOS (WEB UPLOADS)
@@ -410,7 +419,6 @@ def main(page: ft.Page):
         page.update()
 
     def ejecutar_eliminacion_lambda(e):
-        """Conversión de AFN-λ a AFN sin λ con explicaciones formales paso a paso (Sección 2.2)."""
         nonlocal automata_sin_lambda_convertido
         data_table_afn_sin_lambda.rows = []
         data_table_pasos_eliminacion.rows = []
@@ -437,18 +445,12 @@ def main(page: ft.Page):
             )
             txt_info_conversion_lambda.color = ft.colors.GREEN_400
 
-            # -----------------------------------------------------------------
-            # CONSTRUCCIÓN DEL PASO A PASO EXPLICADO (PASO 1 Y PASO 2)
-            # -----------------------------------------------------------------
-            lineas_pasos = []
-            
-            lineas_pasos.append("=== PASO 1: CERRADURAS LAMBDA CL(q) ===")
+            lineas_pasos = ["=== PASO 1: CERRADURAS LAMBDA CL(q) ==="]
             for q, cl in sorted(reporte["cerraduras_individuales"].items()):
                 lineas_pasos.append(f"  • CL({q}) = {formatear_conjunto(cl)}")
             
             lineas_pasos.append("\n=== PASO 2: DETERMINACIÓN DE ESTADOS FINALES (F') ===")
             lineas_pasos.append(f"  Estados finales originales F = {formatear_conjunto(reporte['finales_originales'])}")
-            lineas_pasos.append("  Un estado q ∈ F' si CL(q) ∩ F ≠ ∅:")
             
             for item in reporte["estados_finales_calculo"]:
                 q = item["estado"]
@@ -462,9 +464,6 @@ def main(page: ft.Page):
 
             txt_explicacion_paso_a_paso_22.value = "\n".join(lineas_pasos)
 
-            # -----------------------------------------------------------------
-            # TABLA DETALLADA DEL PASO 3
-            # -----------------------------------------------------------------
             filas_desglose = []
             for item in reporte.get("transiciones_desglose", []):
                 filas_desglose.append(
@@ -480,9 +479,6 @@ def main(page: ft.Page):
                 )
             data_table_pasos_eliminacion.rows = filas_desglose
 
-            # -----------------------------------------------------------------
-            # TABLA DE TRANSICIONES RESULTANTE DEL AFN SIN LAMBDA
-            # -----------------------------------------------------------------
             alfabeto_ordenado = sorted(automata_sin_lambda_convertido.alfabeto)
             columnas = [ft.DataColumn(ft.Text("Estado"))] + [
                 ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
@@ -567,6 +563,83 @@ def main(page: ft.Page):
         except Exception as err:
             txt_info_afd.value = f"❌ Error durante la conversión a AFD: {err}"
             txt_info_afd.color = ft.colors.RED_400
+
+        page.update()
+
+    def ejecutar_minimizacion_afd(e):
+        """Minimización del AFD usando partición de estados equivalentes (Sección 2.4)."""
+        nonlocal afd_minimo_convertido
+        data_table_afd_minimo.rows = []
+
+        # Si ya convertimos previamente a AFD, usamos ese; si no, usamos el autómata actual
+        base_automata = afd_convertido if afd_convertido and afd_convertido.estados else automata_actual
+
+        if not base_automata.estados:
+            txt_info_minimizacion.value = "⚠️ Primero carga un autómata o conviértelo a AFD."
+            txt_info_minimizacion.color = ft.colors.ORANGE_400
+            page.update()
+            return
+
+        try:
+            afd_minimo_convertido, reporte = MinimizadorAFD.minimizar(base_automata)
+            finales = obtener_finales(afd_minimo_convertido)
+
+            txt_info_minimizacion.value = (
+                f"✅ Minimización completada exitosamente:\n"
+                f"• Q_min = {formatear_conjunto(afd_minimo_convertido.estados)}\n"
+                f"• Σ = {formatear_conjunto(afd_minimo_convertido.alfabeto)}\n"
+                f"• q0_min = {afd_minimo_convertido.estado_inicial}\n"
+                f"• F_min = {formatear_conjunto(finales)}"
+            )
+            txt_info_minimizacion.color = ft.colors.GREEN_400
+
+            # 1. Historial de particiones P0, P1, P2...
+            lineas_particiones = []
+            if reporte.get("estados_inalcanzables"):
+                lineas_particiones.append(
+                    f"⚠️ Estados inalcanzables eliminados: {formatear_conjunto(set(reporte['estados_inalcanzables']))}\n"
+                )
+            
+            lineas_particiones.append("=== PROCESO DE PARTICIÓN DE ESTADOS (ALGORITMO DE MOORE) ===")
+            for item in reporte.get("historial_particiones", []):
+                grupos_formatted = [formatear_conjunto(g) for g in item["grupos"]]
+                lineas_particiones.append(f"  • {item['descripcion']}: { {', '.join(grupos_formatted)} }")
+
+            txt_particiones_historial.value = "\n".join(lineas_particiones)
+
+            # 2. Mapeo de alias M0, M1... a conjuntos equivalentes
+            lineas_alias = ["\n=== EQUIVALENCIA DE ESTADOS EN EL AFD MÍNIMO ==="]
+            for alias, conj in sorted(reporte.get("mapeo_alias", {}).items()):
+                lineas_alias.append(f"  • {alias} = {formatear_conjunto(conj)}")
+            txt_mapeo_minimo.value = "\n".join(lineas_alias)
+
+            # 3. Construcción de la tabla de transiciones final
+            alfabeto_ordenado = sorted(afd_minimo_convertido.alfabeto)
+            columnas = [ft.DataColumn(ft.Text("Estado Mínimo"))] + [
+                ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
+            ]
+
+            filas = []
+            for est in sorted(afd_minimo_convertido.estados):
+                prefijo = ""
+                if est == afd_minimo_convertido.estado_inicial:
+                    prefijo += "→ "
+                if est in finales:
+                    prefijo += "* "
+
+                celdas = [ft.DataCell(ft.Text(f"{prefijo}{est}"))]
+                for s in alfabeto_ordenado:
+                    destinos = afd_minimo_convertido.transiciones.get((est, s), set())
+                    celdas.append(ft.DataCell(ft.Text(formatear_conjunto(destinos) if destinos else "∅")))
+
+                filas.append(ft.DataRow(cells=celdas))
+
+            data_table_afd_minimo.columns = columnas
+            data_table_afd_minimo.rows = filas
+
+        except Exception as err:
+            txt_info_minimizacion.value = f"❌ Error durante la minimización: {err}"
+            txt_info_minimizacion.color = ft.colors.RED_400
 
         page.update()
 
@@ -798,6 +871,37 @@ def main(page: ft.Page):
         ),
     )
 
+    tab_minimizacion_afd = ft.Tab(
+        text="2.4 Minimizar AFD",
+        icon=ft.icons.COMPRESS,
+        content=ft.Container(
+            padding=15,
+            content=ft.Column(
+                [
+                    ft.Text("2.4 Minimización de AFD (Algoritmo de Partición)", size=18, weight=ft.FontWeight.BOLD),
+                    ft.ElevatedButton(
+                        "Minimizar AFD",
+                        icon=ft.icons.COMPRESS,
+                        on_click=ejecutar_minimizacion_afd,
+                    ),
+                    txt_info_minimizacion,
+                    ft.Divider(),
+                    txt_particiones_historial,
+                    txt_mapeo_minimo,
+                    ft.Divider(),
+                    ft.Text("Tabla de Transiciones del AFD Mínimo", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Column(
+                        [data_table_afd_minimo],
+                        scroll=ft.ScrollMode.AUTO,
+                        expand=True,
+                    ),
+                ],
+                spacing=15,
+                scroll=ft.ScrollMode.AUTO,
+            ),
+        ),
+    )
+
     tab_operaciones = ft.Tab(
         text="Operaciones",
         icon=ft.icons.CALCULATE,
@@ -833,6 +937,7 @@ def main(page: ft.Page):
             tab_cerradura_lambda,
             tab_eliminacion_lambda,
             tab_conversion_afd,
+            tab_minimizacion_afd,
             tab_operaciones,
         ],
         expand=True,
