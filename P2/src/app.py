@@ -12,15 +12,15 @@ def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.padding = 20
 
-    # Carpeta interna en el contenedor para alojar los archivos subidos
+    # Carpeta interna dentro del contenedor para alojar las cargas
     UPLOAD_DIR = os.path.join(os.getcwd(), "uploads")
     os.makedirs(UPLOAD_DIR, exist_ok=True)
 
-    # Variable global del autómata activo en la sesión
+    # Autómata activo en la sesión
     automata_actual = Automata()
 
     # -------------------------------------------------------------------------
-    # COMPONENTES DE ESTADO / INTERFAZ
+    # COMPONENTES DE INTERFAZ
     # -------------------------------------------------------------------------
     txt_status_carga = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
     txt_definicion_formal = ft.Text(
@@ -31,7 +31,7 @@ def main(page: ft.Page):
         rows=[]
     )
 
-    # Componentes para simulación paso a paso
+    # Componentes para simulación
     input_cadena_simular = ft.TextField(
         label="Cadena a simular (ej. 0101)", width=300
     )
@@ -40,13 +40,13 @@ def main(page: ft.Page):
         expand=1, spacing=5, padding=10, auto_scroll=True, height=200
     )
 
-    # Componentes para operaciones sobre lenguajes
+    # Componentes para operaciones
     input_cadena_op1 = ft.TextField(label="Cadena 1", width=200)
     input_cadena_op2 = ft.TextField(label="Cadena 2", width=200)
     txt_resultado_operacion = ft.Text("", size=15, selectable=True)
 
     # -------------------------------------------------------------------------
-    # FUNCIONES AUXILIARES DE ACTUALIZACIÓN
+    # ACTUALIZACIÓN DE VISTAS
     # -------------------------------------------------------------------------
     def actualizar_vistas_definicion():
         """Actualiza la tabla de transiciones y la definición formal en pantalla."""
@@ -67,7 +67,7 @@ def main(page: ft.Page):
             f"Definición Formal:\n• {q_str}\n• {alphabet_str}\n• {q0_str}\n• {f_str}"
         )
 
-        # Construcción de la Data Table de transiciones
+        # Construcción de la Data Table
         alfabeto_ordenado = sorted(list(automata_actual.alfabeto))
         columnas = [ft.DataColumn(ft.Text("Estado"))] + [
             ft.DataColumn(ft.Text(simbolo)) for simbolo in alfabeto_ordenado
@@ -98,10 +98,10 @@ def main(page: ft.Page):
         page.update()
 
     # -------------------------------------------------------------------------
-    # FILEPICKER CON TRANSFERENCIA DE ARCHIVOS (WEB UPLOAD)
+    # MANEJO DE ARCHIVOS (WEB UPLOADS)
     # -------------------------------------------------------------------------
     def al_cargar_completado(e: ft.FilePickerUploadEvent):
-        """Disparado cuando el archivo termina de transferirse al servidor en Docker."""
+        """Se ejecuta cuando el archivo finaliza la subida al contenedor."""
         nonlocal automata_actual
         if e.error:
             txt_status_carga.value = f"❌ Error de transferencia: {e.error}"
@@ -122,17 +122,30 @@ def main(page: ft.Page):
         page.update()
 
     def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
-        """Inicia el envío del archivo usando la ruta de upload del servidor web."""
-        if e.files and len(e.files) > 0:
-            archivo = e.files[0]
-            file_picker_abrir.upload(
-                [
-                    ft.FilePickerUploadFile(
-                        archivo.name,
-                        upload_url=f"/upload/{archivo.name}",
-                    )
-                ]
-            )
+        """Inicia el envío HTTP del archivo seleccionado."""
+        if not e.files or len(e.files) == 0:
+            return
+
+        archivo = e.files[0]
+        
+        # Obtenemos la URL firmada
+        upload_url = page.get_upload_url(archivo.name, 600)
+
+        txt_status_carga.value = f"⏳ Cargando {archivo.name}..."
+        txt_status_carga.color = ft.colors.BLUE_400
+        page.update()
+
+        # Usamos método PUT para coincidir con la firma firmada del servidor estático
+        file_picker_abrir.upload(
+            [
+                ft.FilePickerUploadFile(
+                    name=archivo.name,
+                    upload_url=upload_url,
+                    method="PUT",
+                )
+            ]
+        )
+
     def al_guardar_archivo(e: ft.FilePickerResultEvent):
         if not e.path:
             return
@@ -165,7 +178,7 @@ def main(page: ft.Page):
     page.overlay.append(file_picker_guardar)
 
     # -------------------------------------------------------------------------
-    # ACCIONES DE BOTONES
+    # EVENTOS DE BOTONES
     # -------------------------------------------------------------------------
     def ejecutar_simulacion(e):
         list_pasos_simulacion.controls.clear()
@@ -217,7 +230,7 @@ def main(page: ft.Page):
         page.update()
 
     # -------------------------------------------------------------------------
-    # PESTAÑAS DE LA INTERFAZ
+    # ESTRUCTURA DE PESTAÑAS
     # -------------------------------------------------------------------------
     tab_definicion = ft.Tab(
         text="Definición y Transiciones",
