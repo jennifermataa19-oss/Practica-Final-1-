@@ -26,26 +26,28 @@ class AutomataParser:
         # Si el XML envuelve el autómata dentro de <automaton>
         automaton_node = root.find('automaton') if root.find('automaton') is not None else root
 
-        automata = Automata()
-        mapa_id_nombre = {}  # Mapeo de id interno de JFLAP al nombre del estado
+        estados = set()
+        estado_inicial = None
+        estados_aceptacion = set()
+        mapa_id_nombre = {}  # Para mapear id interno de JFLAP al nombre del estado
 
         # 1. Extraer estados
         for state_node in automaton_node.findall('state'):
             s_id = state_node.get('id')
             s_name = state_node.get('name') or f"q{s_id}"
             
-            automata.agregar_estado(s_name)
+            estados.add(s_name)
             mapa_id_nombre[s_id] = s_name
 
             if state_node.find('initial') is not None:
-                automata.estado_inicial = s_name
+                estado_inicial = s_name
             if state_node.find('final') is not None:
-                if hasattr(automata, "estados_aceptacion"):
-                    automata.estados_aceptacion.add(s_name)
-                if hasattr(automata, "estados_finales"):
-                    automata.estados_finales.add(s_name)
+                estados_aceptacion.add(s_name)
 
         # 2. Extraer transiciones y construir alfabeto
+        alfabeto = set()
+        transiciones = {}
+
         for trans_node in automaton_node.findall('transition'):
             from_node = trans_node.find('from')
             to_node = trans_node.find('to')
@@ -57,7 +59,6 @@ class AutomataParser:
             to_id = to_node.text
             read_node = trans_node.find('read')
             
-            # Si read no tiene texto o no existe, es cadena vacía (lambda/épsilon)
             simbolo = read_node.text.strip() if (read_node is not None and read_node.text) else ''
 
             origen = mapa_id_nombre.get(from_id)
@@ -66,21 +67,22 @@ class AutomataParser:
             if not origen or not destino:
                 continue
 
-            # Agregar símbolo al alfabeto si no es lambda/épsilon
             if simbolo != '' and simbolo != 'λ' and simbolo != 'ε':
-                automata.alfabeto.add(simbolo)
+                alfabeto.add(simbolo)
 
-            # Usar método del objeto Automata o fallback directo a diccionario anidado
-            if hasattr(automata, "agregar_transicion"):
-                automata.agregar_transicion(origen, simbolo, destino)
-            else:
-                if origen not in automata.transiciones:
-                    automata.transiciones[origen] = {}
-                if simbolo not in automata.transiciones[origen]:
-                    automata.transiciones[origen][simbolo] = set()
-                automata.transiciones[origen][simbolo].add(destino)
+            # Estructura basada en tuplas: (origen, simbolo) -> set de destinos
+            clave = (origen, simbolo)
+            if clave not in transiciones:
+                transiciones[clave] = set()
+            transiciones[clave].add(destino)
 
-        return automata
+        return Automata(
+            estados=estados,
+            alfabeto=alfabeto,
+            estado_inicial=estado_inicial,
+            estados_aceptacion=estados_aceptacion,
+            transiciones=transiciones
+        )
 
     @staticmethod
     def desde_json(ruta_archivo):
@@ -88,31 +90,26 @@ class AutomataParser:
         with open(ruta_archivo, 'r', encoding='utf-8') as f:
             data = json.load(f)
 
-        automata = Automata()
-        for est in data.get('estados', []):
-            automata.agregar_estado(est)
-
-        automata.alfabeto = set(data.get('alfabeto', []))
-        automata.estado_inicial = data.get('estado_inicial')
+        estados = set(data.get('estados', []))
+        alfabeto = set(data.get('alfabeto', []))
+        estado_inicial = data.get('estado_inicial')
+        estados_aceptacion = set(data.get('estados_aceptacion', []))
         
-        finales = set(data.get('estados_aceptacion', data.get('estados_finales', [])))
-        if hasattr(automata, "estados_aceptacion"):
-            automata.estados_aceptacion = finales
-        if hasattr(automata, "estados_finales"):
-            automata.estados_finales = finales
-
+        transiciones = {}
         for t in data.get('transiciones', []):
             origen = t['origen']
             simbolo = t['simbolo']
             destino = t['destino']
 
-            if hasattr(automata, "agregar_transicion"):
-                automata.agregar_transicion(origen, simbolo, destino)
-            else:
-                if origen not in automata.transiciones:
-                    automata.transiciones[origen] = {}
-                if simbolo not in automata.transiciones[origen]:
-                    automata.transiciones[origen][simbolo] = set()
-                automata.transiciones[origen][simbolo].add(destino)
+            clave = (origen, simbolo)
+            if clave not in transiciones:
+                transiciones[clave] = set()
+            transiciones[clave].add(destino)
 
-        return automata
+        return Automata(
+            estados=estados,
+            alfabeto=alfabeto,
+            estado_inicial=estado_inicial,
+            estados_aceptacion=estados_aceptacion,
+            transiciones=transiciones
+        )

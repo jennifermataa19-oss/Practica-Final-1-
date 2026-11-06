@@ -16,19 +16,16 @@ class CerraduraLambdaSimulador:
         cerradura = set(estados)
         pila = list(estados)
 
-        # Representaciones posibles del símbolo lambda/épsilon
         SIMBOLOS_LAMBDA = {"", "lambda", "λ", "ε", "eps", "epsilon"}
 
         while pila:
             actual = pila.pop()
-            trans_actual = automata.transiciones.get(actual, {})
-
-            for simbolo, destinos in trans_actual.items():
-                if simbolo.lower() in SIMBOLOS_LAMBDA:
-                    for dest in destinos:
-                        if dest not in cerradura:
-                            cerradura.add(dest)
-                            pila.append(dest)
+            for lamb in SIMBOLOS_LAMBDA:
+                destinos = automata.transiciones.get((actual, lamb), set())
+                for dest in destinos:
+                    if dest not in cerradura:
+                        cerradura.add(dest)
+                        pila.append(dest)
 
         return cerradura
 
@@ -42,7 +39,6 @@ class CerraduraLambdaSimulador:
         if not automata.estado_inicial:
             return False, historial_pasos
 
-        # Estado inicial + cerradura lambda inicial
         estados_iniciales_puros = {automata.estado_inicial}
         estados_actuales = CerraduraLambdaSimulador.calcular_cerradura_conjunto(
             automata, estados_iniciales_puros
@@ -61,12 +57,10 @@ class CerraduraLambdaSimulador:
         for i, simbolo in enumerate(cadena, 1):
             siguiente_conjunto_base = set()
 
-            # Mover por el símbolo leído desde los estados activos actuales
             for est in estados_actuales:
-                destinos = automata.transiciones.get(est, {}).get(simbolo, set())
+                destinos = automata.transiciones.get((est, simbolo), set())
                 siguiente_conjunto_base.update(destinos)
 
-            # Aplicar cerradura lambda al nuevo conjunto de estados
             siguiente_con_cerradura = CerraduraLambdaSimulador.calcular_cerradura_conjunto(
                 automata, siguiente_conjunto_base
             )
@@ -83,11 +77,9 @@ class CerraduraLambdaSimulador:
 
             estados_actuales = siguiente_con_cerradura
 
-            # Si el conjunto queda vacío, no hay transiciones posibles
             if not estados_actuales:
                 break
 
-        # Es aceptada si intersecta con los estados finales/aceptación
         finales = getattr(
             automata,
             "estados_aceptacion",
