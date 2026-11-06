@@ -9,6 +9,7 @@ from cerradura_lambda import CerraduraLambdaSimulador
 from eliminacion_lambda import EliminadorLambda
 from afn_a_afd import ConvertidorSubconjuntos
 from minimizacion_afd import MinimizadorAFD
+from validador_lote import ValidadorLote
 
 
 def formatear_conjunto(conjunto):
@@ -29,6 +30,8 @@ def main(page: ft.Page):
     automata_sin_lambda_convertido = None
     afd_convertido = None
     afd_minimo_convertido = None
+    resultados_lote_actual = []
+    nombre_archivo_lote_actual = ""
 
     # -------------------------------------------------------------------------
     # COMPONENTES DE INTERFAZ
@@ -96,15 +99,31 @@ def main(page: ft.Page):
         rows=[],
     )
 
-    # -------------------------------------------------------------------------
-    # COMPONENTES SECCIÓN 2.4: MINIMIZACIÓN DE AFD
-    # -------------------------------------------------------------------------
+    # Componentes Sección 2.4
     txt_info_minimizacion = ft.Text("", size=14, selectable=True)
     txt_particiones_historial = ft.Text("", size=13, selectable=True, font_family="Consolas")
-    txt_mapeo_minimo = ft.Text("", size=13, selectable=True, font_family="Consolas")
     data_table_afd_minimo = ft.DataTable(
         columns=[ft.DataColumn(ft.Text("Estado Mínimo"))],
         rows=[],
+    )
+
+    # -------------------------------------------------------------------------
+    # COMPONENTES SECCIÓN 2.5: VALIDACIÓN DE VARIAS CADENAS
+    # -------------------------------------------------------------------------
+    txt_status_lote = ft.Text("", size=14, weight=ft.FontWeight.BOLD)
+    data_table_lote = ft.DataTable(
+        columns=[
+            ft.DataColumn(ft.Text("Línea")),
+            ft.DataColumn(ft.Text("Cadena")),
+            ft.DataColumn(ft.Text("Resultado")),
+            ft.DataColumn(ft.Text("Estados Activos Finales")),
+        ],
+        rows=[],
+    )
+    btn_guardar_reporte_lote = ft.ElevatedButton(
+        "Guardar Informe (.txt)",
+        icon=ft.icons.DOWNLOAD,
+        disabled=True,
     )
 
     input_cadena_op1 = ft.TextField(label="Cadena 1", width=200)
@@ -181,6 +200,7 @@ def main(page: ft.Page):
         page.update()
 
     def limpiar_resultados():
+        nonlocal resultados_lote_actual, nombre_archivo_lote_actual
         list_pasos_simulacion.controls.clear()
         txt_resultado_simulacion.value = ""
         txt_resultado_cerradura.value = ""
@@ -195,11 +215,15 @@ def main(page: ft.Page):
         data_table_afd.rows = []
         txt_info_minimizacion.value = ""
         txt_particiones_historial.value = ""
-        txt_mapeo_minimo.value = ""
         data_table_afd_minimo.rows = []
+        txt_status_lote.value = ""
+        data_table_lote.rows = []
+        btn_guardar_reporte_lote.disabled = True
+        resultados_lote_actual = []
+        nombre_archivo_lote_actual = ""
 
     # -------------------------------------------------------------------------
-    # MANEJO DE ARCHIVOS (WEB UPLOADS)
+    # MANEJO DE ARCHIVOS (WEB UPLOADS Y REPORTES)
     # -------------------------------------------------------------------------
     def resolver_ruta_archivo(nombre_archivo):
         rutas_directas = [
@@ -239,15 +263,67 @@ def main(page: ft.Page):
                     f"No se encontró el archivo '{e.file_name}' en el servidor."
                 )
 
-            automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
-            limpiar_resultados()
-            actualizar_vistas_definicion()
-            txt_status_carga.value = f"✅ Autómata cargado exitosamente: {e.file_name}"
-            txt_status_carga.color = ft.colors.GREEN_400
+            # Si es un archivo de autómata
+            if e.file_name.endswith((".jff", ".xml", ".json")):
+                automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
+                limpiar_resultados()
+                actualizar_vistas_definicion()
+                txt_status_carga.value = f"✅ Autómata cargado exitosamente: {e.file_name}"
+                txt_status_carga.color = ft.colors.GREEN_400
+
+            # Si es un archivo de texto con lote de cadenas (Sección 2.5)
+            elif e.file_name.endswith(".txt"):
+                procesar_lote_desde_txt(ruta_servidor, e.file_name)
+
         except Exception as err:
             txt_status_carga.value = f"❌ Error al procesar el archivo: {err}"
             txt_status_carga.color = ft.colors.RED_400
 
+        page.update()
+
+    def procesar_lote_desde_txt(ruta_servidor, nombre_archivo):
+        nonlocal resultados_lote_actual, nombre_archivo_lote_actual
+
+        if not automata_actual.estados:
+            txt_status_lote.value = "⚠️ Primero carga un autómata antes de validar cadenas."
+            txt_status_lote.color = ft.colors.ORANGE_400
+            page.update()
+            return
+
+        with open(ruta_servidor, "r", encoding="utf-8") as f:
+            contenido = f.read()
+
+        nombre_archivo_lote_actual = nombre_archivo
+        resultados_lote_actual = ValidadorLote.validar_cadenas_desde_texto(
+            automata_actual, contenido
+        )
+
+        filas = []
+        aceptadas = 0
+        for res in resultados_lote_actual:
+            color = ft.colors.GREEN_400 if res["es_aceptada"] else ft.colors.RED_400
+            if res["es_aceptada"]:
+                aceptadas += 1
+
+            filas.append(
+                ft.DataRow(
+                    cells=[
+                        ft.DataCell(ft.Text(str(res["linea"]))),
+                        ft.DataCell(ft.Text(res["cadena"])),
+                        ft.DataCell(ft.Text(res["resultado"], color=color, weight=ft.FontWeight.BOLD)),
+                        ft.DataCell(ft.Text(res["estados_finales_alcanzados"])),
+                    ]
+                )
+            )
+
+        data_table_lote.rows = filas
+        btn_guardar_reporte_lote.disabled = False
+
+        txt_status_lote.value = (
+            f"✅ Lote validado: {len(resultados_lote_actual)} cadenas procesadas. "
+            f"({aceptadas} Aceptadas, {len(resultados_lote_actual) - aceptadas} Rechazadas)"
+        )
+        txt_status_lote.color = ft.colors.GREEN_400
         page.update()
 
     def al_seleccionar_archivo(e: ft.FilePickerResultEvent):
@@ -277,16 +353,30 @@ def main(page: ft.Page):
 
         try:
             ruta_destino = e.path
-            if ruta_destino.endswith(".json"):
-                AutomataExporter.a_json(automata_actual, ruta_destino)
-            elif ruta_destino.endswith(".jff") or ruta_destino.endswith(".xml"):
-                AutomataExporter.a_jff_xml(automata_actual, ruta_destino)
-            else:
-                ruta_destino += ".json"
-                AutomataExporter.a_json(automata_actual, ruta_destino)
 
-            txt_status_carga.value = f"✅ Archivo guardado en: {ruta_destino}"
-            txt_status_carga.color = ft.colors.GREEN_400
+            # Guardar reporte de validación en lote (.txt)
+            if ruta_destino.endswith(".txt") or (not ruta_destino.endswith(".json") and not ruta_destino.endswith(".jff")):
+                if not ruta_destino.endswith(".txt"):
+                    ruta_destino += ".txt"
+
+                contenido_reporte = ValidadorLote.generar_reporte_texto(
+                    nombre_archivo_lote_actual, resultados_lote_actual
+                )
+                with open(ruta_destino, "w", encoding="utf-8") as f:
+                    f.write(contenido_reporte)
+
+                txt_status_lote.value = f"✅ Informe guardado en: {ruta_destino}"
+                txt_status_lote.color = ft.colors.GREEN_400
+            else:
+                # Guardar autómata
+                if ruta_destino.endswith(".json"):
+                    AutomataExporter.a_json(automata_actual, ruta_destino)
+                elif ruta_destino.endswith(".jff") or ruta_destino.endswith(".xml"):
+                    AutomataExporter.a_jff_xml(automata_actual, ruta_destino)
+
+                txt_status_carga.value = f"✅ Autómata guardado en: {ruta_destino}"
+                txt_status_carga.color = ft.colors.GREEN_400
+
         except Exception as err:
             txt_status_carga.value = f"❌ Error al guardar archivo: {err}"
             txt_status_carga.color = ft.colors.RED_400
@@ -301,6 +391,12 @@ def main(page: ft.Page):
 
     page.overlay.append(file_picker_abrir)
     page.overlay.append(file_picker_guardar)
+
+    # Configurar evento del botón de guardar informe de lote
+    btn_guardar_reporte_lote.on_click = lambda _: file_picker_guardar.save_file(
+        allowed_extensions=["txt"],
+        file_name="informe_validacion_cadenas.txt",
+    )
 
     # -------------------------------------------------------------------------
     # MANEJADORES DE EVENTOS
@@ -567,7 +663,6 @@ def main(page: ft.Page):
         page.update()
 
     def ejecutar_minimizacion_afd(e):
-        """Minimización del AFD con el formato del M. en C. Gabriel Hurtado Avilés (Sección 2.4)."""
         nonlocal afd_minimo_convertido
         data_table_afd_minimo.rows = []
 
@@ -592,7 +687,6 @@ def main(page: ft.Page):
             )
             txt_info_minimizacion.color = ft.colors.GREEN_400
 
-            # Redacción del reporte estilo Gabriel Hurtado
             lineas = []
             lineas.append("Paso 1: Partición Inicial")
             lineas.append("  " + ",   ".join(reporte["p1_inicial"]))
@@ -609,7 +703,6 @@ def main(page: ft.Page):
                         lineas.append(f"  {c_name} tiene un solo estado.")
                     else:
                         lineas.append(f"  La tabla de {c_name} es:")
-                        # Formatear la mini tabla
                         lineas.append(f"    State | Transición | Clase en {p_nombre}")
                         for f in t_info["filas"]:
                             est = f["estado"]
@@ -622,7 +715,6 @@ def main(page: ft.Page):
             lineas.append(f"Paso 4: Autómata Simplificado ({reporte['particion_final_nombre']} = {ronda['particion_nombre']} y terminamos)")
             txt_particiones_historial.value = "\n".join(lineas)
 
-            # Tabla de transiciones final
             alfabeto_ordenado = sorted(afd_minimo_convertido.alfabeto)
             columnas = [ft.DataColumn(ft.Text("Clase"))] + [
                 ft.DataColumn(ft.Text(s)) for s in alfabeto_ordenado
@@ -652,7 +744,7 @@ def main(page: ft.Page):
             txt_info_minimizacion.color = ft.colors.RED_400
 
         page.update()
-    
+
     def ejecutar_concatenacion(e):
         c1 = input_cadena_op1.value or ""
         c2 = input_cadena_op2.value or ""
@@ -709,19 +801,19 @@ def main(page: ft.Page):
             content=ft.Column(
                 [
                     ft.Text("Importación y Exportación de Archivos", size=20, weight=ft.FontWeight.BOLD),
-                    ft.Text("Soporta formatos .jff (JFLAP), .json y .xml"),
+                    ft.Text("Soporta autómatas (.jff, .json, .xml) y lotes de cadenas (.txt)"),
                     ft.Row(
                         [
                             ft.ElevatedButton(
-                                "Cargar Archivo",
+                                "Cargar Autómata o Lote .txt",
                                 icon=ft.icons.UPLOAD_FILE,
                                 on_click=lambda _: file_picker_abrir.pick_files(
-                                    allowed_extensions=["jff", "json", "xml"],
+                                    allowed_extensions=["jff", "json", "xml", "txt"],
                                     allow_multiple=False,
                                 ),
                             ),
                             ft.ElevatedButton(
-                                "Guardar Archivo",
+                                "Guardar Autómata",
                                 icon=ft.icons.SAVE,
                                 on_click=lambda _: file_picker_guardar.save_file(
                                     allowed_extensions=["jff", "json", "xml"],
@@ -897,11 +989,47 @@ def main(page: ft.Page):
                     txt_info_minimizacion,
                     ft.Divider(),
                     txt_particiones_historial,
-                    txt_mapeo_minimo,
                     ft.Divider(),
                     ft.Text("Tabla de Transiciones del AFD Mínimo", size=16, weight=ft.FontWeight.BOLD),
                     ft.Column(
                         [data_table_afd_minimo],
+                        scroll=ft.ScrollMode.AUTO,
+                        expand=True,
+                    ),
+                ],
+                spacing=15,
+                scroll=ft.ScrollMode.AUTO,
+            ),
+        ),
+    )
+
+    tab_lote_cadenas = ft.Tab(
+        text="2.5 Validación en Lote",
+        icon=ft.icons.CHECKLIST,
+        content=ft.Container(
+            padding=15,
+            content=ft.Column(
+                [
+                    ft.Text("2.5 Validación de Varias Cadenas desde Archivo .txt", size=18, weight=ft.FontWeight.BOLD),
+                    ft.Row(
+                        [
+                            ft.ElevatedButton(
+                                "Cargar Archivo .txt de Cadenas",
+                                icon=ft.icons.UPLOAD_FILE,
+                                on_click=lambda _: file_picker_abrir.pick_files(
+                                    allowed_extensions=["txt"],
+                                    allow_multiple=False,
+                                ),
+                            ),
+                            btn_guardar_reporte_lote,
+                        ],
+                        spacing=15,
+                    ),
+                    txt_status_lote,
+                    ft.Divider(),
+                    ft.Text("Resultados de la Evaluación Masiva:", size=16, weight=ft.FontWeight.BOLD),
+                    ft.Column(
+                        [data_table_lote],
                         scroll=ft.ScrollMode.AUTO,
                         expand=True,
                     ),
@@ -948,6 +1076,7 @@ def main(page: ft.Page):
             tab_eliminacion_lambda,
             tab_conversion_afd,
             tab_minimizacion_afd,
+            tab_lote_cadenas,
             tab_operaciones,
         ],
         expand=True,
