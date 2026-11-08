@@ -423,8 +423,8 @@ def geometria_diagrama(auto):
     max_nombre = max(len(str(e)) for e in estados)
     radio = min(42.0, max(24.0, 4.6 * max_nombre + 8))
     fuente = 14 if max_nombre <= 3 else 12 if max_nombre <= 5 else 11 if max_nombre <= 7 else 10
-    sep_x = 2 * radio + 92
-    sep_y = 2 * radio + 54
+    sep_x = 2 * radio + 160
+    sep_y = 2 * radio + 100
 
     # Posiciones: cada capa centrada verticalmente, ordenada por el promedio de sus predecesores
     ypos = {}
