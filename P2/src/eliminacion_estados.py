@@ -1,149 +1,147 @@
-from typing import Dict, Set, Tuple, List, Any
-from automata import Automata
+import copy
 
-
-class ConversorAutomataARegex:
-    """Módulo para convertir un AFD a Expresión Regular mediante Eliminación de Estados."""
-
-    @staticmethod
-    def verificar_es_afd_puro(automata: Automata) -> Tuple[bool, str]:
-        """
-        Verifica si el autómata es un AFD determinista puro:
-        - No debe tener transiciones lambda ('λ', 'ε').
-        - Cada estado debe tener exactamente una transición por cada símbolo del alfabeto.
-        Retorna (True, "") o (False, mensaje_error).
-        """
-        # 1. Comprobar transiciones lambda
-        for (est, simb), destinos in automata.transiciones.items():
-            if simb in {"λ", "ε", "lambda", ""}:
-                return False, f"El estado '{est}' tiene una transición lambda ('{simb}'), lo cual invalida el determinismo estricto."
-
-        # 2. Comprobar determinismo completo (transiciones exactas)
-        alfabeto = sorted(list(automata.alfabeto))
-        for est in sorted(automata.estados):
-            for simb in alfabeto:
-                destinos = automata.transiciones.get((est, simb), set())
-                if len(destinos) != 1:
-                    return False, f"El estado '{est}' con el símbolo '{simb}' tiene {len(destinos)} destinos (debe ser exactamente 1)."
-
-        return True, "El autómata es un AFD determinista puro válido."
+class EliminadorEstados:
+    """
+    Clase para convertir un Autómata Finito (AFN/AFD) a una Expresión Regular
+    mediante el algoritmo de eliminación de estados (Método de Arden).
+    """
 
     @staticmethod
-    def convertir_a_regex(automata: Automata) -> Tuple[str, List[Dict[str, Any]]]:
+    def _purificar_automata(automata):
         """
-        Aplica el algoritmo de eliminación de estados para obtener la Expresión Regular.
-        Retorna la expresión final y el historial de pasos con los autómatas generalizados.
+        Prepara el autómata para el algoritmo:
+        1. Crea un único estado inicial 'qi' que no recibe entradas.
+        2. Crea un único estado final 'qf' que no tiene salidas.
+        3. Normaliza las transiciones para que el algoritmo pueda operar de forma segura.
         """
-        # 1. Crear un AFD equivalente con un ÚNICO estado inicial nuevo (sin entradas previas)
-        # y un ÚNICO estado final sumidero (sin salidas, uniendo todos los de aceptación previos con lambda).
+        # Copia profunda para no alterar la estructura del autómata original
+        auto = copy.deepcopy(automata)
+
+        nuevo_inicio = "q_init_puro"
+        nuevo_final = "q_final_puro"
+
+        # Asegurar nombres únicos para los estados puros
+        mientras_exista = lambda nombre: nombre in auto.estados
+        idx = 0
+        tmp_init = nuevo_inicio
+        tmp_final = nuevo_final
+        while mientras_exista(tmp_init) or mientras_exista(tmp_final):
+            idx += 1
+            tmp_init = f"{nuevo_inicio}_{idx}"
+            tmp_final = f"{nuevo_final}_{idx}"
         
-        estados = set(automata.estados)
-        transiciones = dict(automata.transiciones)
-        alfabeto = set(automata.alfabeto)
+        nuevo_inicio = tmp_init
+        nuevo_final = tmp_final
 
-        q_in_viejo = automata.estado_inicial
-        finales_viejos = getattr(automata, "estados_aceptacion", getattr(automata, "estados_finales", getattr(automata, "finales", set())))
+        # Inicializar grafo de Expresión Regular: grafo[u][v] = expresion
+        grafo = {e: {} for e in auto.estados}
+        grafo[nuevo_inicio] = {}
+        grafo[nuevo_final] = {}
 
-        q_inicio_nuevo = "q_start_gen"
-        q_fin_nuevo = "q_accept_gen"
+        # Mapear transiciones existentes agrupando símbolos
+        for (origen, simbolo), destinos in auto.transiciones.items():
+            simbolo_str = "E" if simbolo in ["λ", "epsilon", "E", "eps", ""] else str(simbolo)
+            for dest in destinos:
+                if dest not in grafo[origen]:
+                    grafo[origen][dest] = []
+                grafo[origen][dest].append(simbolo_str)
 
-        while q_inicio_nuevo in estados:
-            q_inicio_nuevo += "_"
-        while q_fin_nuevo in estados:
-            q_fin_nuevo += "_"
-
-        estados.add(q_inicio_nuevo)
-        estados.add(q_fin_nuevo)
-
-        # Transición lambda del nuevo inicial al viejo inicial
-        transiciones[(q_inicio_nuevo, "λ")] = {q_in_viejo}
-
-        # Transiciones lambda de los viejos finales al nuevo final
-        for f in finales_viejos:
-            transiciones[(f, "λ")] = transiciones.get((f, "λ"), set()).union({q_fin_nuevo})
-
-        # Historial para la interfaz
-        historial_pasos = []
-
-        # 2. Estados a eliminar (todos excepto el nuevo inicio y el nuevo final)
-        estados_a_eliminar = sorted([st for st in estados if st not in {q_inicio_nuevo, q_fin_nuevo}])
-
-        # Estructura de expresiones regulares entre pares de estados: R[qi][qj] = "regex"
-        # Para simplificar, convertimos las transiciones en un diccionario anidado de expresiones string.
-        regex_matriz: Dict[str, Dict[str, str]] = {s1: {s2: "" for s2 in estados} for s1 in estados}
-
-        for (u, s), dests in transiciones.items():
-            for v in dests:
-                simb_str = f"({s})" if s not in {"λ", "ε", ""} and len(s) > 1 else s
-                if simb_str in {"λ", "ε", ""}:
-                    simb_str = "ε"
-                
-                if regex_matriz[u][v]:
-                    regex_matriz[u][v] += f"|{simb_str}"
+        # Unir transiciones paralelas con operador OR (|)
+        for u in grafo:
+            for v in grafo[u]:
+                simbolos = grafo[u][v]
+                if len(simbolos) == 1:
+                    grafo[u][v] = simbolos[0]
                 else:
-                    regex_matriz[u][v] = simb_str
+                    grafo[u][v] = f"({'|'.join(simbolos)})"
 
-        # Función auxiliar para envolver en paréntesis si es necesario
-        def envolver(r: str) -> str:
-            if not r or r == "ε":
-                return r
-            if "|" in r:
-                return f"({r})"
-            return r
+        # Conectar el nuevo estado inicial puro al estado inicial original con λ (E)
+        if auto.estado_inicial:
+            grafo[nuevo_inicio][auto.estado_inicial] = "E"
 
-        # 3. Proceso de Eliminación de Estados
-        for idx, q_elim in enumerate(estados_a_eliminar, 1):
-            # Guardar estado antes de eliminar para el reporte
-            historial_pasos.append({
-                "paso": idx,
-                "estado_eliminado": q_elim,
-                "matriz_antes": {k: dict(v) for k, v in regex_matriz.items()}
+        # Conectar todos los estados de aceptación originales al nuevo estado final puro con λ (E)
+        finales = getattr(auto, "estados_aceptacion", getattr(auto, "estados_finales", getattr(auto, "finales", set())))
+        for f in finales:
+            grafo[f][nuevo_final] = "E"
+
+        todos_los_estados = set(grafo.keys())
+        return grafo, nuevo_inicio, nuevo_final, todos_los_estados
+
+    @classmethod
+    def convertir_a_er(cls, automata):
+        """
+        Ejecuta el algoritmo de eliminación de estados y retorna la ER resultante
+        junto con el historial de pasos para mostrarlo en la interfaz.
+        """
+        grafo, q_init, q_final, estados = cls._purificar_automata(automata)
+        pasos = []
+        
+        # Estados que se deben eliminar (todos excepto el inicial y final puros)
+        estados_a_eliminar = [e for e in estados if e not in (q_init, q_final)]
+
+        pasos.append({
+            "accion": "Purificación del Autómata",
+            "descripcion": f"Se agregaron los estados aislados '{q_init}' y '{q_final}' con transiciones λ."
+        })
+
+        # Algoritmo de eliminación de estados
+        for q_k in estados_a_eliminar:
+            # Encontrar predecesores (u -> q_k) y sucesores (q_k -> v)
+            predecesores = [u for u in grafo if q_k in grafo[u] and u != q_k]
+            sucesores = [v for v in grafo[q_k] if v != q_k]
+            
+            # Auto-bucle en q_k (q_k -> q_k)
+            bucle_k = grafo[q_k].get(q_k, None)
+
+            for u in predecesores:
+                for v in sucesores:
+                    p_uq = grafo[u][q_k]
+                    p_qv = grafo[q_k][v]
+
+                    # Construir la nueva expresión regular simplificada
+                    # L = P_uq + (Bucle_k)* + P_qv
+                    exp_bucle = ""
+                    if bucle_k:
+                        if len(bucle_k) == 1 or (bucle_k.startswith("(") and bucle_k.endswith(")")):
+                            exp_bucle = f"{bucle_k}*"
+                        else:
+                            exp_bucle = f"({bucle_k})*"
+
+                    exp_p_uq = "" if p_uq == "E" else p_uq
+                    exp_p_qv = "" if p_qv == "E" else p_qv
+
+                    # Concatenar términos
+                    nueva_exp = f"{exp_p_uq}{exp_bucle}{exp_p_qv}"
+                    if nueva_exp == "":
+                        nueva_exp = "E"
+
+                    # Combinar con transición previa u -> v si ya existía
+                    if v in grafo[u]:
+                        prev_exp = grafo[u][v]
+                        grafo[u][v] = f"({prev_exp}|{nueva_exp})"
+                    else:
+                        grafo[u][v] = nueva_exp
+
+            # Eliminar q_k del grafo
+            del grafo[q_k]
+            for u in grafo:
+                if q_k in grafo[u]:
+                    del grafo[u][q_k]
+
+            pasos.append({
+                "accion": f"Eliminado estado '{q_k}'",
+                "descripcion": f"Se eliminó el estado '{q_k}' y se actualizaron las rutas entre sus predecesores y sucesores."
             })
 
-            # Estados predecesores y sucesores de q_elim (que no sean q_elim mismo)
-            predecesores = [s for s in estados if s != q_elim and regex_matriz[s][q_elim]]
-            sucesores = [s for s in estados if s != q_elim and regex_matriz[q_elim][s]]
-
-            # Bucle propio en q_elim (R_kk)
-            r_kk = regex_matriz[q_elim][q_elim]
-            loop_str = ""
-            if r_kk:
-                if r_kk == "ε":
-                    loop_str = ""
-                else:
-                    loop_str = f"({r_kk})*"
-
-            for p in predecesores:
-                for s in sucesores:
-                    r_pk = regex_matriz[p][q_elim]
-                    r_ks = regex_matriz[q_elim][s]
-
-                    # Construir nueva expresión: r_pk . (r_kk)* . r_ks
-                    partes = []
-                    if r_pk and r_pk != "ε":
-                        partes.append(envolver(r_pk))
-                    if loop_str:
-                        partes.append(loop_str)
-                    if r_ks and r_ks != "ε":
-                        partes.append(envolver(r_ks))
-
-                    camino_nuevo = "".join(partes) if partes else "ε"
-
-                    # Combinar con transición existente entre p y s
-                    if regex_matriz[p][s]:
-                        regex_matriz[p][s] += f"|{camino_nuevo}"
-                    else:
-                        regex_matriz[p][s] = camino_nuevo
-
-            # Eliminar filas y columnas de q_elim de la matriz
-            for st in estados:
-                regex_matriz[st][q_elim] = ""
-                regex_matriz[q_elim][st] = ""
-
-        # La expresión final está en R[q_inicio_nuevo][q_fin_nuevo]
-        regex_final = regex_matriz[q_inicio_nuevo][q_fin_nuevo]
+        # Expresión regular final entre q_init y q_final
+        er_final = grafo.get(q_init, {}).get(q_final, "∅")
         
-        # Limpieza estética de épsilons sobrantes
-        regex_final = regex_final.replace("ε", "")
+        # Limpieza básica de caracteres epsilon redundantes
+        er_final = er_final.replace("E", "")
+        if not er_final:
+            er_final = "λ"
 
-        return regex_final if regex_final else "ε", historial_pasos
+        return {
+            "expresion_regular": er_final,
+            "pasos": pasos
+        }

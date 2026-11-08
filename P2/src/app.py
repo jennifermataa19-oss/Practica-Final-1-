@@ -23,7 +23,7 @@ from minimizacion_afd import MinimizadorAFD
 from validador_lote import ValidadorLote
 from regex_parser import RegexParser, RegexSyntaxError
 from thompson import ConstructorThompson
-from eliminacion_estados import ConversorAutomataARegex
+from eliminacion_estados import EliminadorEstados
 from operaciones_avanzadas import OperacionesAvanzadas
 
 
@@ -1619,37 +1619,29 @@ def main(page: ft.Page):
             avisar_sin_automata(txt_status_ej3)
             return
 
-        es_puro, mensaje = ConversorAutomataARegex.verificar_es_afd_puro(automata_actual)
-        if not es_puro:
-            txt_status_ej3.value = f"❌ El autómata no es un AFD determinista puro:\n  • {mensaje}"
-            txt_status_ej3.color = ROJO
-            txt_resultado_regex_final.value = ""
-            txt_historial_eliminacion.value = ""
-            page.update()
-            return
-
         try:
-            regex_final, historial = ConversorAutomataARegex.convertir_a_regex(automata_actual)
+            # Llamada al nuevo EliminadorEstados (que purifica automáticamente por debajo)
+            resultado = EliminadorEstados.convertir_a_er(automata_actual)
+            regex_final = resultado["expresion_regular"]
+            historial = resultado["pasos"]
 
-            txt_status_ej3.value = f"✅ Verificación exitosa: {mensaje}"
+            txt_status_ej3.value = " Conversión a Expresión Regular completada con éxito."
             txt_status_ej3.color = VERDE
-            txt_resultado_regex_final.value = f"Éxito! Expresión Regular resultante:\n  R = {regex_final}"
+            txt_resultado_regex_final.value = f"Éxito! Expresión Regular resultante:\n R = {regex_final}"
             txt_resultado_regex_final.color = VERDE
 
             lineas = ["=== HISTORIAL DE ELIMINACIÓN DE ESTADOS ==="]
-            for h in historial:
-                lineas.append(f"\nPaso {h['paso']}: Estado eliminado '{h['estado_eliminado']}'")
-                lineas.append("  Matriz de transiciones parcial:")
-                for u, destinos in h["matriz_antes"].items():
-                    for v, expr in destinos.items():
-                        if expr:
-                            lineas.append(f"    R[{u}][{v}] = {expr}")
-            txt_historial_eliminacion.value = "\n".join(lineas)
-        except Exception as err:
-            txt_status_ej3.value = f"❌ Error durante la conversión: {err}"
-            txt_status_ej3.color = ROJO
-        page.update()
+            for idx, h in enumerate(historial, 1):
+                lineas.append(f"\nPaso {idx}: {h['accion']}")
+                lineas.append(f"  {h['descripcion']}")
 
+            txt_historial_eliminacion.value = "\n".join(lineas)
+
+        except Exception as err:
+            txt_status_ej3.value = f" Error durante la conversión: {err}"
+            txt_status_ej3.color = ROJO
+
+        page.update()
     # =========================================================================
     # OPERACIONES AVANZADAS
     # =========================================================================
