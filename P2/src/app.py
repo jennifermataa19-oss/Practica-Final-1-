@@ -209,6 +209,7 @@ def llenar_tabla_transiciones(
 
     tabla.rows = filas
 
+    
 
 # =============================================================================
 # COMPONENTES VISUALES REUTILIZABLES
@@ -423,8 +424,8 @@ def geometria_diagrama(auto):
     max_nombre = max(len(str(e)) for e in estados)
     radio = min(42.0, max(24.0, 4.6 * max_nombre + 8))
     fuente = 14 if max_nombre <= 3 else 12 if max_nombre <= 5 else 11 if max_nombre <= 7 else 10
-    sep_x = 2 * radio + 160
-    sep_y = 2 * radio + 100
+    sep_x = 2 * radio + 180
+    sep_y = 2 * radio + 120
 
     # Posiciones: cada capa centrada verticalmente, ordenada por el promedio de sus predecesores
     ypos = {}
@@ -659,7 +660,7 @@ def construir_shapes(prims, etiquetas, ox, oy):
 
 
 class PanelDiagrama:
-    """Tarjeta que dibuja un autómata (solo visualización) y muestra su tipo: AFD, AFN, AFN-λ."""
+    """Tarjeta que dibuja un autómata y muestra su tipo: AFD, AFN, AFN-λ."""
 
     def __init__(self, titulo_panel, col=None):
         self.objeto = None  # último autómata dibujado (se compara por identidad)
@@ -888,6 +889,43 @@ def main(page: ft.Page):
         ft.DataTable(columns=[ft.DataColumn(ft.Text("Estado AFD"))], rows=[])
     )
 
+    def descargar_afd_subconjuntos_click(e):
+        nonlocal afd_convertido
+
+        if not afd_convertido:
+            txt_info_afd.value = "⚠️ Primero realiza la conversión de AFN a AFD."
+            txt_info_afd.color = AMBAR
+            page.update()
+            return
+
+        try:
+            # Buscar el siguiente número disponible en uploads
+            contador = 1
+            nombre_archivo = f"afd_subconjuntos_{contador}.jff"
+            ruta_jff = os.path.join(UPLOAD_DIR, nombre_archivo)
+
+            while os.path.exists(ruta_jff):
+                contador += 1
+                nombre_archivo = f"afd_subconjuntos_{contador}.jff"
+                ruta_jff = os.path.join(UPLOAD_DIR, nombre_archivo)
+
+            AutomataExporter.a_jff(afd_convertido, ruta_jff)
+
+            txt_info_afd.value = f"✅ AFD exportado en: {ruta_jff}"
+            txt_info_afd.color = VERDE
+        except Exception as err:
+            txt_info_afd.value = f"❌ Error al guardar AFD: {err}"
+            txt_info_afd.color = ROJO
+
+        page.update()
+
+    btn_descargar_afd_subconjuntos = ft.OutlinedButton(
+        "Descargar AFD (.jff)",
+        icon=ft.icons.DOWNLOAD,
+        disabled=True,
+        on_click=descargar_afd_subconjuntos_click
+    )
+
     # -------------------------------------------------------------------------
     # COMPONENTES: 2.4 Minimización
     # -------------------------------------------------------------------------
@@ -896,7 +934,41 @@ def main(page: ft.Page):
     data_table_afd_minimo = estilo_tabla(
         ft.DataTable(columns=[ft.DataColumn(ft.Text("Clase"))], rows=[])
     )
+    def descargar_afd_minimo_click(e):
+        nonlocal afd_minimo_convertido
 
+        if not afd_minimo_convertido:
+            txt_info_minimizacion.value = "⚠️ Primero realiza la minimización del AFD."
+            txt_info_minimizacion.color = AMBAR
+            page.update()
+            return
+
+        try:
+            # Contador incremental para el AFD minimizado
+            contador = 1
+            nombre_archivo = f"afd_minimo_{contador}.jff"
+            ruta_jff = os.path.join(UPLOAD_DIR, nombre_archivo)
+
+            while os.path.exists(ruta_jff):
+                contador += 1
+                nombre_archivo = f"afd_minimo_{contador}.jff"
+                ruta_jff = os.path.join(UPLOAD_DIR, nombre_archivo)
+
+            AutomataExporter.a_jff(afd_minimo_convertido, ruta_jff)
+
+            txt_info_minimizacion.value = f"✅ AFD Minimizado exportado en: {ruta_jff}"
+            txt_info_minimizacion.color = VERDE
+        except Exception as err:
+            txt_info_minimizacion.value = f"❌ Error al guardar AFD Minimizado: {err}"
+            txt_info_minimizacion.color = ROJO
+
+        page.update()
+    btn_descargar_afd_minimo = ft.OutlinedButton(
+        "Descargar AFD Minimizado (.jff)",
+        icon=ft.icons.DOWNLOAD,
+        disabled=True,
+        on_click=descargar_afd_minimo_click
+        )
     # -------------------------------------------------------------------------
     # COMPONENTES: 2.5 Validación en lote
     # -------------------------------------------------------------------------
@@ -919,6 +991,69 @@ def main(page: ft.Page):
     # -------------------------------------------------------------------------
     # COMPONENTES: P4 ER → AFN-λ (Thompson)
     # -------------------------------------------------------------------------
+        # Declarar la función que ejecuta la descarga cuando el usuario elige la ruta
+    def guardar_thompson_jff(e: ft.FilePickerResultEvent):
+        try:
+            if not afn_thompson_generado:
+                return
+
+            nombre_archivo = "thompson_afn.jff"
+            
+            # Si e.path tiene valor (Modo Escritorio / Local):
+            if e.path:
+                ruta = e.path if e.path.endswith((".jff", ".xml")) else e.path + ".jff"
+                AutomataExporter.a_jff(afn_thompson_generado, ruta)
+                txt_status_regex.value = f"✅ Guardado en: {ruta}"
+            else:
+                # Si estamos en Modo Web (Navegador localhost):
+                # Guardamos primero el archivo tempo    ral en el servidor
+                UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+                os.makedirs(UPLOAD_DIR, exist_ok=True)
+                ruta_temp = os.path.join(UPLOAD_DIR, nombre_archivo)
+                
+                AutomataExporter.a_jff(afn_thompson_generado, ruta_temp)
+                
+                # Lanzar la descarga directa en el navegador
+                url_descarga = page.get_upload_url(nombre_archivo, 600)
+                page.launch_url(url_descarga, web_window_name="_self")
+                txt_status_regex.value = "✅ Archivo descargado en tu navegador."
+
+            txt_status_regex.color = ft.colors.GREEN
+        except Exception as err:
+            txt_status_regex.value = f"❌ Error al exportar: {err}"
+            txt_status_regex.color = ft.colors.RED
+
+    page.update()
+    def descargar_afn_thompson_click(e):
+        nonlocal afn_thompson_generado
+
+        if not afn_thompson_generado:
+            txt_status_regex.value = "⚠️ Primero construye una Expresión Regular válida."
+            txt_status_regex.color = AMBAR
+            page.update()
+            return
+
+        try:
+            # Buscar el siguiente número disponible en la carpeta uploads
+            contador = 1
+            nombre_archivo = f"thompson_afn_{contador}.jff"
+            ruta_jff = os.path.join(UPLOAD_DIR, nombre_archivo)
+
+            while os.path.exists(ruta_jff):
+                contador += 1
+                nombre_archivo = f"thompson_afn_{contador}.jff"
+                ruta_jff = os.path.join(UPLOAD_DIR, nombre_archivo)
+
+            # Exportar archivo único
+            AutomataExporter.a_jff(afn_thompson_generado, ruta_jff)
+
+            txt_status_regex.value = f"✅ Archivo guardado en: {ruta_jff}"
+            txt_status_regex.color = VERDE
+        except Exception as err:
+            txt_status_regex.value = f"❌ Error al guardar archivo: {err}"
+            txt_status_regex.color = ROJO
+
+        page.update()
     input_regex = campo(
         "Expresión regular (ej. (a|b)*abb)",
         width=400,
@@ -931,10 +1066,16 @@ def main(page: ft.Page):
     data_table_thompson = estilo_tabla(
         ft.DataTable(columns=[ft.DataColumn(ft.Text("Estado"))], rows=[])
     )
+    
     btn_cargar_en_p3 = boton_secundario(
         "Cargar AFN-λ en el simulador", ft.icons.PLAY_FOR_WORK, disabled=True
     )
-
+    btn_descargar_jff = ft.OutlinedButton(
+    "Descargar AFN-λ (.jff)",
+    icon=ft.icons.DOWNLOAD,
+    disabled=True,  # 👈 Cámbialo a False para ver el botón encendido de una vez
+    on_click=descargar_afn_thompson_click
+    )
     # -------------------------------------------------------------------------
     # COMPONENTES: P4 Autómata → ER
     # -------------------------------------------------------------------------
@@ -1192,35 +1333,36 @@ def main(page: ft.Page):
 
     def al_guardar_archivo(e: ft.FilePickerResultEvent):
         try:
-            nombre_sugerido = "automata_exportado.json"
-            ruta_temporal = os.path.join(UPLOAD_DIR, nombre_sugerido)
+            # Toma el autómata de la ER (o el cargado actualmente)
+            automata_a_exportar = getattr(page, "automata_resultado", None) or automata_actual
+            
+            if not automata_a_exportar:
+                txt_status_carga.value = "❌ Genera un autómata desde una ER primero para poder guardarlo."
+                txt_status_carga.color = ROJO
+                page.update()
+                return
 
-            # Generar el archivo temporalmente en el servidor
-            AutomataExporter.a_json(automata_actual, ruta_temporal)
-
+            nombre_sugerido = "automata_regex.jff"
+            
             if e.path:
-                # Modo Escritorio / Local
                 ruta_destino = e.path
+                # Si el usuario eligió .jff o .xml, usamos la función de JFLAP
                 if ruta_destino.endswith((".jff", ".xml")):
-                    AutomataExporter.a_jff_xml(automata_actual, ruta_destino)
+                    AutomataExporter.a_jff(automata_a_exportar, ruta_destino)
                 else:
                     if not ruta_destino.endswith(".json"):
                         ruta_destino += ".json"
-                    AutomataExporter.a_json(automata_actual, ruta_destino)
-                txt_status_carga.value = f"✅ Archivo guardado en: {ruta_destino}"
-            else:
-                # Modo Web (Navegador): Fuerza la descarga directa al equipo
-                url_descarga = page.get_upload_url(nombre_sugerido, 600)
-                page.launch_url(url_descarga)
-                txt_status_carga.value = "✅ Archivo descargado en tu navegador exitosamente."
-
-            txt_status_carga.color = VERDE
+                    AutomataExporter.a_json(automata_a_exportar, ruta_destino)
+                
+                txt_status_carga.value = f"✅ Autómata guardado en: {ruta_destino}"
+                txt_status_carga.color = VERDE
+                
         except Exception as err:
             txt_status_carga.value = f"❌ Error al guardar archivo: {err}"
             txt_status_carga.color = ROJO
 
-        page.update()
-
+    page.update()
+    
     def generar_informe_lote(e):
         if not resultados_lote_actual:
             txt_status_lote.value = "⚠️ No hay resultados de lote para exportar."
@@ -1467,6 +1609,7 @@ def main(page: ft.Page):
 
             panel_23_orig.mostrar(automata_actual)
             panel_23_res.mostrar(afd_convertido)
+            btn_descargar_afd_subconjuntos.disabled = False
         except Exception as err:
             txt_info_afd.value = f"❌ Error durante la conversión a AFD: {err}"
             txt_info_afd.color = ROJO
@@ -1535,6 +1678,7 @@ def main(page: ft.Page):
 
             panel_24_orig.mostrar(base)
             panel_24_res.mostrar(afd_minimo_convertido)
+            btn_descargar_afd_minimo.disabled = False
         except Exception as err:
             txt_info_minimizacion.value = f"❌ Error durante la minimización: {err}"
             txt_info_minimizacion.color = ROJO
@@ -1557,7 +1701,7 @@ def main(page: ft.Page):
             ast, _patron_formateado = RegexParser.parse(patron)
             afn_thompson_generado, historial = ConstructorThompson().construir(ast)
             afn = afn_thompson_generado
-
+            btn_descargar_jff.disabled = False
             txt_status_regex.value = (
                 f"✅ Expresión VÁLIDA: '{patron}'\n"
                 f"• Estados creados: {len(afn.estados)}\n"
@@ -1569,6 +1713,7 @@ def main(page: ft.Page):
 
             lineas = ["=== CONSTRUCCIÓN DE THOMPSON PASO A PASO ==="]
             for i, paso in enumerate(historial, 1):
+                
                 lineas.append(f"Paso {i}: {paso['operacion']}")
                 lineas.append(f"  • sub-inicial: {paso['estado_inicial']} | sub-final: {paso['estado_final']}")
             txt_pasos_thompson.value = "\n".join(lineas)
@@ -1600,11 +1745,10 @@ def main(page: ft.Page):
         nonlocal automata_actual
         if not afn_thompson_generado:
             return
-
         automata_actual = afn_thompson_generado
+        page.automata_resultado = afn_thompson_generado
         limpiar_resultados()
         actualizar_vistas_definicion()
-
         txt_status_carga.value = "✅ AFN-λ de Thompson cargado exitosamente en el sistema general."
         txt_status_carga.color = VERDE
         ir_a("editor")
@@ -1956,8 +2100,10 @@ def main(page: ft.Page):
                                 "Convertir a AFD",
                                 ft.icons.AUTO_FIX_HIGH,
                                 on_click=ejecutar_conversion_afd,
-                            )
+                            ),
+                            btn_descargar_afd_subconjuntos,
                         ),
+
                         txt_info_afd,
                     ],
                     "Conversión",
@@ -1990,7 +2136,8 @@ def main(page: ft.Page):
                                 "Minimizar AFD",
                                 ft.icons.COMPRESS,
                                 on_click=ejecutar_minimizacion_afd,
-                            )
+                            ),
+                            btn_descargar_afd_minimo
                         ),
                         txt_info_minimizacion,
                     ],
@@ -2056,6 +2203,7 @@ def main(page: ft.Page):
                                 on_click=ejecutar_construccion_thompson,
                             ),
                             btn_cargar_en_p3,
+                            btn_descargar_jff,
                         ),
                         txt_status_regex,
                     ],

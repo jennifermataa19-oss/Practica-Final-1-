@@ -51,7 +51,7 @@ class AutomataExporter:
                 ET.SubElement(trans_elem, 'from').text = mapa_id[origen]
                 ET.SubElement(trans_elem, 'to').text = mapa_id[dest]
                 read_elem = ET.SubElement(trans_elem, 'read')
-                read_elem.text = simbolo if simbolo != 'λ' else ''
+                read_elem.text = simbolo if simbolo and simbolo != 'λ' else ''
 
         # Formatear el XML bonito (pretty print)
         xml_str = minidom.parseString(ET.tostring(structure)).toprettyxml(indent="  ")
@@ -61,5 +61,10 @@ class AutomataExporter:
     @staticmethod
     def a_xml(automata, ruta_archivo):
         """Exporta a XML estructurado genérico."""
-        # Se puede reutilizar el formato JFLAP por estándar de la práctica
+        AutomataExporter.a_jff(automata, ruta_archivo)
+
+    # Alias para evitar errores de llamada en Flet
+    @staticmethod
+    def a_jff_xml(automata, ruta_archivo):
+        """Alias para guardar en .jff / .xml."""
         AutomataExporter.a_jff(automata, ruta_archivo)

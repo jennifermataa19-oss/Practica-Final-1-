@@ -50,29 +50,21 @@ class MinimizadorAFD:
         finales = alcanzables.intersection(finales_originales)
         no_finales = alcanzables.difference(finales)
 
-        # Contador global de índices de clase
         contador_clases = 0
-
-        # Mapeo: tuple(estados) -> 'Xᵢ'
-        mapeo_clases: Dict[Tuple[str, ...], str] = {}
-        # Mapeo inverso: 'Xᵢ' -> set(estados)
         definicion_clases: Dict[str, Set[str]] = {}
 
-        def registrar_clase(conjunto_estados: Set[str]) -> str:
+        def crear_clase(conjunto_estados: Set[str]) -> str:
             nonlocal contador_clases
-            tup = tuple(sorted(list(conjunto_estados)))
-            if tup not in mapeo_clases:
-                nombre = f"X{a_subindice(contador_clases)}"
-                contador_clases += 1
-                mapeo_clases[tup] = nombre
-                definicion_clases[nombre] = set(conjunto_estados)
-            return mapeo_clases[tup]
+            nombre = f"X{a_subindice(contador_clases)}"
+            contador_clases += 1
+            definicion_clases[nombre] = set(conjunto_estados)
+            return nombre
 
         # ---------------------------------------------------------------------
         # PASO 1: Partición Inicial P₁ = {X₀, X₁}
         # ---------------------------------------------------------------------
-        x0_name = registrar_clase(no_finales) if no_finales else None
-        x1_name = registrar_clase(finales) if finales else None
+        x0_name = crear_clase(no_finales) if no_finales else None
+        x1_name = crear_clase(finales) if finales else None
 
         particion_actual = []
         if x0_name:
@@ -86,7 +78,7 @@ class MinimizadorAFD:
             for c_name in particion:
                 if estado in definicion_clases[c_name]:
                     return c_name
-            return "?"
+            return "-"
 
         # ---------------------------------------------------------------------
         # PASO 2: Rondas de Refinamiento
@@ -162,7 +154,7 @@ class MinimizadorAFD:
                     hubo_cambios = True
                     nuevas_clases_creadas = []
                     for subg in subgrupos:
-                        nueva_c_name = registrar_clase(set(subg))
+                        nueva_c_name = crear_clase(set(subg))
                         nuevas_clases_creadas.append(nueva_c_name)
                         nueva_particion.append(nueva_c_name)
 
@@ -188,7 +180,7 @@ class MinimizadorAFD:
                 break
 
         # ---------------------------------------------------------------------
-        # PASO 4: Autómata Simplificado Resultante
+        # PASO 3: Construcción del Autómata Simplificado Resultante
         # ---------------------------------------------------------------------
         nuevos_estados = set(particion_actual)
         nuevo_inicial = ""
@@ -203,13 +195,15 @@ class MinimizadorAFD:
             if bool(conj_estados.intersection(finales_originales)):
                 nuevos_finales.add(c_name)
 
+            # Tomar un estado representativo del conjunto para mapear salidas
             rep = sorted(list(conj_estados))[0]
             for simb in alfabeto:
                 destinos = automata_original.transiciones.get((rep, simb), set())
                 if destinos:
                     dest_real = sorted(list(destinos))[0]
                     c_dest = obtener_clase_de_estado(dest_real, particion_actual)
-                    nuevas_transiciones[(c_name, simb)] = {c_dest}
+                    if c_dest != "-":
+                        nuevas_transiciones[(c_name, simb)] = {c_dest}
 
         afd_minimo = Automata(
             estados=nuevos_estados,
@@ -219,7 +213,9 @@ class MinimizadorAFD:
             transiciones=nuevas_transiciones
         )
 
-        setattr(afd_minimo, "mapeo_subconjuntos", definicion_clases)
+        # Mapeo de subconjuntos activo solo con las clases de la partición final
+        definicion_finales_dict = {c: definicion_clases[c] for c in particion_actual}
+        setattr(afd_minimo, "mapeo_subconjuntos", definicion_finales_dict)
 
         p1_nombre = f"P{a_subindice(1)}"
         reporte = {
@@ -230,7 +226,7 @@ class MinimizadorAFD:
             "p1_nombre": f"{p1_nombre} = {{{', '.join([n for n in [x0_name, x1_name] if n])}}}",
             "rondas": rondas_reporte,
             "particion_final_nombre": f"P{a_subindice(numero_ronda)}",
-            "definicion_clases": definicion_clases
+            "definicion_clases": definicion_finales_dict
         }
 
         return afd_minimo, reporte

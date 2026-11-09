@@ -1,0 +1,16 @@
+==========================================================
+      INFORME TÉCNICO: SUBCADENAS, PREFIJOS Y SUFIJOS
+==========================================================
+Cadena analizada: 'abaaa' (Longitud n = 5)
+
+Convención adoptada: La cadena vacía (λ) se incluye formalmente entre los prefijos, sufijos y subcadenas, ya que cualquier cadena s se puede descomponer como s = λs = sλ.
+
+--- PREFIJOS (Total: 6) ---
+a, ab, aba, abaa, abaaa, λ (cadena vacía)
+
+--- SUFIJOS (Total: 6) ---
+a, aa, aaa, baaa, abaaa, λ (cadena vacía)
+
+--- SUBCADENAS (Total: 12) ---
+a, b, aa, ab, ba, aaa, aba, baa, abaa, baaa, abaaa, λ (cadena vacía)
+==========================================================
