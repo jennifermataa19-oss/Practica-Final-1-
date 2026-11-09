@@ -879,7 +879,42 @@ def main(page: ft.Page):
     data_table_afn_sin_lambda = estilo_tabla(
         ft.DataTable(columns=[ft.DataColumn(ft.Text("Estado"))], rows=[])
     )
+    def descargar_afn_sin_lambda_click(e):
+        nonlocal automata_sin_lambda_convertido
 
+        if not automata_sin_lambda_convertido:
+            txt_info_conversion_lambda.value = " Primero realiza la eliminación de transiciones lambda."
+            txt_info_conversion_lambda.color = AMBAR
+            page.update()
+            return
+
+        try:
+            # Generar nombre limpio incremental (afn_sin_lambda_1.jff, afn_sin_lambda_2.jff...)
+            contador = 1
+            nombre_archivo = f"afn_sin_lambda_{contador}.jff"
+            ruta_jff = os.path.join(UPLOAD_DIR, nombre_archivo)
+
+            while os.path.exists(ruta_jff):
+                contador += 1
+                nombre_archivo = f"afn_sin_lambda_{contador}.jff"
+                ruta_jff = os.path.join(UPLOAD_DIR, nombre_archivo)
+
+            AutomataExporter.a_jff(automata_sin_lambda_convertido, ruta_jff)
+
+            txt_info_conversion_lambda.value = f":) AFN sin λ exportado en: {ruta_jff}"
+            txt_info_conversion_lambda.color = VERDE
+        except Exception as err:
+            txt_info_conversion_lambda.value = f":( Error al guardar AFN sin λ: {err}"
+            txt_info_conversion_lambda.color = ROJO
+
+        page.update()
+
+    btn_descargar_afn_sin_lambda = ft.OutlinedButton(
+        "Descargar AFN sin λ (.jff)",
+        icon=ft.icons.DOWNLOAD,
+        disabled=True,
+        on_click=descargar_afn_sin_lambda_click,
+    )
     # -------------------------------------------------------------------------
     # COMPONENTES: 2.3 AFN → AFD
     # -------------------------------------------------------------------------
@@ -893,7 +928,7 @@ def main(page: ft.Page):
         nonlocal afd_convertido
 
         if not afd_convertido:
-            txt_info_afd.value = "⚠️ Primero realiza la conversión de AFN a AFD."
+            txt_info_afd.value = " Primero realiza la conversión de AFN a AFD."
             txt_info_afd.color = AMBAR
             page.update()
             return
@@ -911,10 +946,10 @@ def main(page: ft.Page):
 
             AutomataExporter.a_jff(afd_convertido, ruta_jff)
 
-            txt_info_afd.value = f"✅ AFD exportado en: {ruta_jff}"
+            txt_info_afd.value = f":) AFD exportado en: {ruta_jff}"
             txt_info_afd.color = VERDE
         except Exception as err:
-            txt_info_afd.value = f"❌ Error al guardar AFD: {err}"
+            txt_info_afd.value = f":( Error al guardar AFD: {err}"
             txt_info_afd.color = ROJO
 
         page.update()
@@ -938,7 +973,7 @@ def main(page: ft.Page):
         nonlocal afd_minimo_convertido
 
         if not afd_minimo_convertido:
-            txt_info_minimizacion.value = "⚠️ Primero realiza la minimización del AFD."
+            txt_info_minimizacion.value = " Primero realiza la minimización del AFD."
             txt_info_minimizacion.color = AMBAR
             page.update()
             return
@@ -956,10 +991,10 @@ def main(page: ft.Page):
 
             AutomataExporter.a_jff(afd_minimo_convertido, ruta_jff)
 
-            txt_info_minimizacion.value = f"✅ AFD Minimizado exportado en: {ruta_jff}"
+            txt_info_minimizacion.value = f":) AFD Minimizado exportado en: {ruta_jff}"
             txt_info_minimizacion.color = VERDE
         except Exception as err:
-            txt_info_minimizacion.value = f"❌ Error al guardar AFD Minimizado: {err}"
+            txt_info_minimizacion.value = f":( Error al guardar AFD Minimizado: {err}"
             txt_info_minimizacion.color = ROJO
 
         page.update()
@@ -1003,7 +1038,7 @@ def main(page: ft.Page):
             if e.path:
                 ruta = e.path if e.path.endswith((".jff", ".xml")) else e.path + ".jff"
                 AutomataExporter.a_jff(afn_thompson_generado, ruta)
-                txt_status_regex.value = f"✅ Guardado en: {ruta}"
+                txt_status_regex.value = f":) Guardado en: {ruta}"
             else:
                 # Si estamos en Modo Web (Navegador localhost):
                 # Guardamos primero el archivo tempo    ral en el servidor
@@ -1016,11 +1051,11 @@ def main(page: ft.Page):
                 # Lanzar la descarga directa en el navegador
                 url_descarga = page.get_upload_url(nombre_archivo, 600)
                 page.launch_url(url_descarga, web_window_name="_self")
-                txt_status_regex.value = "✅ Archivo descargado en tu navegador."
+                txt_status_regex.value = ":) Archivo descargado en tu navegador."
 
             txt_status_regex.color = ft.colors.GREEN
         except Exception as err:
-            txt_status_regex.value = f"❌ Error al exportar: {err}"
+            txt_status_regex.value = f":( Error al exportar: {err}"
             txt_status_regex.color = ft.colors.RED
 
     page.update()
@@ -1028,7 +1063,7 @@ def main(page: ft.Page):
         nonlocal afn_thompson_generado
 
         if not afn_thompson_generado:
-            txt_status_regex.value = "⚠️ Primero construye una Expresión Regular válida."
+            txt_status_regex.value = " Primero construye una Expresión Regular válida."
             txt_status_regex.color = AMBAR
             page.update()
             return
@@ -1047,10 +1082,10 @@ def main(page: ft.Page):
             # Exportar archivo único
             AutomataExporter.a_jff(afn_thompson_generado, ruta_jff)
 
-            txt_status_regex.value = f"✅ Archivo guardado en: {ruta_jff}"
+            txt_status_regex.value = f":) Archivo guardado en: {ruta_jff}"
             txt_status_regex.color = VERDE
         except Exception as err:
-            txt_status_regex.value = f"❌ Error al guardar archivo: {err}"
+            txt_status_regex.value = f":( Error al guardar archivo: {err}"
             txt_status_regex.color = ROJO
 
         page.update()
@@ -1210,7 +1245,7 @@ def main(page: ft.Page):
             panel.limpiar()
 
     def avisar_sin_automata(control):
-        control.value = "⚠️ Primero carga o define un autómata."
+        control.value = " Primero carga o define un autómata."
         control.color = AMBAR
         page.update()
 
@@ -1239,7 +1274,7 @@ def main(page: ft.Page):
         nonlocal resultados_lote_actual, nombre_archivo_lote_actual
 
         if not automata_actual.estados:
-            txt_status_lote.value = "⚠️ Primero carga un autómata antes de validar cadenas."
+            txt_status_lote.value = " Primero carga un autómata antes de validar cadenas."
             txt_status_lote.color = AMBAR
             txt_status_carga.value = txt_status_lote.value
             txt_status_carga.color = AMBAR
@@ -1274,11 +1309,11 @@ def main(page: ft.Page):
         btn_guardar_reporte_lote.disabled = False
 
         txt_status_lote.value = (
-            f"✅ Lote validado: {len(resultados_lote_actual)} cadenas procesadas "
+            f":) Lote validado: {len(resultados_lote_actual)} cadenas procesadas "
             f"({aceptadas} aceptadas, {len(resultados_lote_actual) - aceptadas} rechazadas)"
         )
         txt_status_lote.color = VERDE
-        txt_status_carga.value = f"✅ Lote cargado: {nombre_archivo}"
+        txt_status_carga.value = f":) Lote cargado: {nombre_archivo}"
         txt_status_carga.color = VERDE
 
     def al_cargar_completado(e: ft.FilePickerUploadEvent):
@@ -1286,7 +1321,7 @@ def main(page: ft.Page):
         nonlocal automata_actual
 
         if e.error:
-            txt_status_carga.value = f"❌ Error de transferencia: {e.error}"
+            txt_status_carga.value = f":( Error de transferencia: {e.error}"
             txt_status_carga.color = ROJO
             page.update()
             return
@@ -1304,14 +1339,14 @@ def main(page: ft.Page):
                 automata_actual = AutomataParser.cargar_desde_archivo(ruta_servidor)
                 limpiar_resultados()
                 actualizar_vistas_definicion()
-                txt_status_carga.value = f"✅ Autómata cargado exitosamente: {e.file_name}"
+                txt_status_carga.value = f":) Autómata cargado exitosamente: {e.file_name}"
                 txt_status_carga.color = VERDE
             elif nombre.endswith(".txt"):
                 procesar_lote_desde_txt(ruta_servidor, e.file_name)
             else:
                 raise ValueError("Formato no soportado (usa .jff, .xml, .json o .txt).")
         except Exception as err:
-            txt_status_carga.value = f"❌ Error al procesar el archivo: {err}"
+            txt_status_carga.value = f":( Error al procesar el archivo: {err}"
             txt_status_carga.color = ROJO
 
         page.update()
@@ -1337,7 +1372,7 @@ def main(page: ft.Page):
             automata_a_exportar = getattr(page, "automata_resultado", None) or automata_actual
             
             if not automata_a_exportar:
-                txt_status_carga.value = "❌ Genera un autómata desde una ER primero para poder guardarlo."
+                txt_status_carga.value = ":( Genera un autómata desde una ER primero para poder guardarlo."
                 txt_status_carga.color = ROJO
                 page.update()
                 return
@@ -1354,18 +1389,18 @@ def main(page: ft.Page):
                         ruta_destino += ".json"
                     AutomataExporter.a_json(automata_a_exportar, ruta_destino)
                 
-                txt_status_carga.value = f"✅ Autómata guardado en: {ruta_destino}"
+                txt_status_carga.value = f":) Autómata guardado en: {ruta_destino}"
                 txt_status_carga.color = VERDE
                 
         except Exception as err:
-            txt_status_carga.value = f"❌ Error al guardar archivo: {err}"
+            txt_status_carga.value = f":( Error al guardar archivo: {err}"
             txt_status_carga.color = ROJO
 
     page.update()
     
     def generar_informe_lote(e):
         if not resultados_lote_actual:
-            txt_status_lote.value = "⚠️ No hay resultados de lote para exportar."
+            txt_status_lote.value = " No hay resultados de lote para exportar."
             txt_status_lote.color = AMBAR
             page.update()
             return
@@ -1378,10 +1413,10 @@ def main(page: ft.Page):
             with open(ruta_informe, "w", encoding="utf-8") as f:
                 f.write(contenido)
 
-            txt_status_lote.value = f"✅ Informe generado correctamente en: {ruta_informe}"
+            txt_status_lote.value = f":) Informe generado correctamente en: {ruta_informe}"
             txt_status_lote.color = VERDE
         except Exception as err:
-            txt_status_lote.value = f"❌ Error al escribir el informe: {err}"
+            txt_status_lote.value = f":( Error al escribir el informe: {err}"
             txt_status_lote.color = ROJO
 
         page.update()
@@ -1413,7 +1448,7 @@ def main(page: ft.Page):
         if not isinstance(paso, dict):
             return str(paso)
         if paso.get("error"):
-            return f"Paso {paso.get('paso', '?')}: ❌ {paso['error']}"
+            return f"Paso {paso.get('paso', '?')}: :( {paso['error']}"
 
         numero = paso.get("paso", "?")
         simbolo = paso.get("simbolo")
@@ -1433,7 +1468,7 @@ def main(page: ft.Page):
         try:
             es_valida, traza = automata_actual.simular_paso_a_paso(cadena)
         except Exception as err:
-            txt_resultado_simulacion.value = f"❌ Error durante la simulación: {err}"
+            txt_resultado_simulacion.value = f":( Error durante la simulación: {err}"
             txt_resultado_simulacion.color = ROJO
             page.update()
             return
@@ -1444,10 +1479,10 @@ def main(page: ft.Page):
             )
 
         if es_valida:
-            txt_resultado_simulacion.value = f"🎉 ¡CADENA ACEPTADA! ('{cadena}')"
+            txt_resultado_simulacion.value = f"¡CADENA ACEPTADA! ('{cadena}')"
             txt_resultado_simulacion.color = VERDE
         else:
-            txt_resultado_simulacion.value = f"🚫 CADENA RECHAZADA ('{cadena}')"
+            txt_resultado_simulacion.value = f"CADENA RECHAZADA ('{cadena}')"
             txt_resultado_simulacion.color = ROJO
         page.update()
 
@@ -1457,7 +1492,7 @@ def main(page: ft.Page):
     def calcular_cerradura_individual(e):
         estado_sel = dropdown_estado_cerradura.value
         if not estado_sel:
-            txt_resultado_cerradura.value = "⚠️ Selecciona un estado."
+            txt_resultado_cerradura.value = " Selecciona un estado."
             txt_resultado_cerradura.color = AMBAR
             page.update()
             return
@@ -1467,7 +1502,7 @@ def main(page: ft.Page):
             txt_resultado_cerradura.value = f"CL({estado_sel}) = {formatear_conjunto(cerradura)}"
             txt_resultado_cerradura.color = VERDE
         except Exception as err:
-            txt_resultado_cerradura.value = f"❌ Error: {err}"
+            txt_resultado_cerradura.value = f":( Error: {err}"
             txt_resultado_cerradura.color = ROJO
         page.update()
 
@@ -1484,7 +1519,7 @@ def main(page: ft.Page):
                 automata_actual, cadena
             )
         except Exception as err:
-            txt_resultado_simulacion_directa.value = f"❌ Error durante la simulación: {err}"
+            txt_resultado_simulacion_directa.value = f":( Error durante la simulación: {err}"
             txt_resultado_simulacion_directa.color = ROJO
             page.update()
             return
@@ -1503,10 +1538,10 @@ def main(page: ft.Page):
         ]
 
         if es_valida:
-            txt_resultado_simulacion_directa.value = f"🎉 ¡CADENA ACEPTADA DIRECTAMENTE! ('{cadena}')"
+            txt_resultado_simulacion_directa.value = f" ¡CADENA ACEPTADA DIRECTAMENTE! ('{cadena}')"
             txt_resultado_simulacion_directa.color = VERDE
         else:
-            txt_resultado_simulacion_directa.value = f"🚫 CADENA RECHAZADA DIRECTAMENTE ('{cadena}')"
+            txt_resultado_simulacion_directa.value = f" CADENA RECHAZADA DIRECTAMENTE ('{cadena}')"
             txt_resultado_simulacion_directa.color = ROJO
         page.update()
 
@@ -1530,7 +1565,7 @@ def main(page: ft.Page):
             nuevo = automata_sin_lambda_convertido
 
             txt_info_conversion_lambda.value = (
-                "✅ Conversión completada exitosamente:\n"
+                ":) Conversión completada exitosamente:\n"
                 f"• Q = {formatear_conjunto(nuevo.estados)}\n"
                 f"• Σ = {formatear_conjunto(nuevo.alfabeto)}\n"
                 f"• q0 = {nuevo.estado_inicial}\n"
@@ -1547,7 +1582,7 @@ def main(page: ft.Page):
             for item in reporte["estados_finales_calculo"]:
                 q = item["estado"]
                 inter = formatear_conjunto(item["interseccion_F"]) if item["interseccion_F"] else "∅"
-                veredicto = "✅ Pertenece a F'" if item["es_final"] else "❌ No pertenece a F'"
+                veredicto = ":) Pertenece a F'" if item["es_final"] else ":( No pertenece a F'"
                 lineas.append(f"  • CL({q}) = {formatear_conjunto(item['cl_q'])} ∩ F = {inter}  --->  {veredicto}")
 
             lineas.append("\n=== PASO 3: CÁLCULO DE LA FUNCIÓN DE TRANSICIÓN δ'(q, a) ===")
@@ -1571,9 +1606,9 @@ def main(page: ft.Page):
 
             panel_22_orig.mostrar(automata_actual)
             panel_22_res.mostrar(nuevo)
-
+            btn_descargar_afn_sin_lambda.disabled = False
         except Exception as err:
-            txt_info_conversion_lambda.value = f"❌ Error durante la conversión: {err}"
+            txt_info_conversion_lambda.value = f":( Error durante la conversión: {err}"
             txt_info_conversion_lambda.color = ROJO
         page.update()
 
@@ -1593,7 +1628,7 @@ def main(page: ft.Page):
             afd_convertido, _ = ConvertidorSubconjuntos.afn_a_afd(automata_actual)
 
             txt_info_afd.value = (
-                "✅ Conversión a AFD completada exitosamente:\n"
+                ":) Conversión a AFD completada exitosamente:\n"
                 f"• Q' = {formatear_conjunto(afd_convertido.estados)}\n"
                 f"• Σ = {formatear_conjunto(afd_convertido.alfabeto)}\n"
                 f"• q0' = {afd_convertido.estado_inicial}\n"
@@ -1611,7 +1646,7 @@ def main(page: ft.Page):
             panel_23_res.mostrar(afd_convertido)
             btn_descargar_afd_subconjuntos.disabled = False
         except Exception as err:
-            txt_info_afd.value = f"❌ Error durante la conversión a AFD: {err}"
+            txt_info_afd.value = f":( Error durante la conversión a AFD: {err}"
             txt_info_afd.color = ROJO
         page.update()
 
@@ -1625,7 +1660,7 @@ def main(page: ft.Page):
 
         base = afd_convertido if (afd_convertido and afd_convertido.estados) else automata_actual
         if not base.estados:
-            txt_info_minimizacion.value = "⚠️ Primero carga un autómata o conviértelo a AFD."
+            txt_info_minimizacion.value = "Primero carga un autómata o conviértelo a AFD."
             txt_info_minimizacion.color = AMBAR
             page.update()
             return
@@ -1634,7 +1669,7 @@ def main(page: ft.Page):
             afd_minimo_convertido, reporte = MinimizadorAFD.minimizar(base)
 
             txt_info_minimizacion.value = (
-                "✅ Minimización completada exitosamente:\n"
+                ":) Minimización completada exitosamente:\n"
                 f"• Q_min = {formatear_conjunto(afd_minimo_convertido.estados)}\n"
                 f"• Σ = {formatear_conjunto(afd_minimo_convertido.alfabeto)}\n"
                 f"• q0_min = {afd_minimo_convertido.estado_inicial}\n"
@@ -1680,7 +1715,7 @@ def main(page: ft.Page):
             panel_24_res.mostrar(afd_minimo_convertido)
             btn_descargar_afd_minimo.disabled = False
         except Exception as err:
-            txt_info_minimizacion.value = f"❌ Error durante la minimización: {err}"
+            txt_info_minimizacion.value = f":( Error durante la minimización: {err}"
             txt_info_minimizacion.color = ROJO
         page.update()
 
@@ -1692,7 +1727,7 @@ def main(page: ft.Page):
         patron = (input_regex.value or "").strip()
 
         if not patron:
-            txt_status_regex.value = "⚠️ Ingresa una expresión regular."
+            txt_status_regex.value = " Ingresa una expresión regular."
             txt_status_regex.color = AMBAR
             page.update()
             return
@@ -1703,7 +1738,7 @@ def main(page: ft.Page):
             afn = afn_thompson_generado
             btn_descargar_jff.disabled = False
             txt_status_regex.value = (
-                f"✅ Expresión VÁLIDA: '{patron}'\n"
+                f":) Expresión VÁLIDA: '{patron}'\n"
                 f"• Estados creados: {len(afn.estados)}\n"
                 f"• Alfabeto Σ: {formatear_conjunto(afn.alfabeto)}\n"
                 f"• Estado Inicial: {afn.estado_inicial}\n"
@@ -1725,7 +1760,7 @@ def main(page: ft.Page):
         except RegexSyntaxError as err:
             marcador = " " * err.posicion + "^"
             txt_status_regex.value = (
-                f"❌ ERROR SINTÁCTICO en la posición {err.posicion}:\n"
+                f":( ERROR SINTÁCTICO en la posición {err.posicion}:\n"
                 f"  {patron}\n"
                 f"  {marcador}\n"
                 f"Mensaje: {err.mensaje}"
@@ -1736,7 +1771,7 @@ def main(page: ft.Page):
             panel_thompson.limpiar()
             btn_cargar_en_p3.disabled = True
         except Exception as err:
-            txt_status_regex.value = f"❌ Error inesperado: {err}"
+            txt_status_regex.value = f":( Error inesperado: {err}"
             txt_status_regex.color = ROJO
             btn_cargar_en_p3.disabled = True
         page.update()
@@ -1749,7 +1784,7 @@ def main(page: ft.Page):
         page.automata_resultado = afn_thompson_generado
         limpiar_resultados()
         actualizar_vistas_definicion()
-        txt_status_carga.value = "✅ AFN-λ de Thompson cargado exitosamente en el sistema general."
+        txt_status_carga.value = ":) AFN-λ de Thompson cargado exitosamente en el sistema general."
         txt_status_carga.color = VERDE
         ir_a("editor")
 
@@ -1794,7 +1829,7 @@ def main(page: ft.Page):
         cadena = (input_cadena_ops.value or "").strip()
 
         if not cadena:
-            txt_status_ops.value = "⚠️ Ingresa una cadena válida."
+            txt_status_ops.value = " Ingresa una cadena válida."
             txt_status_ops.color = AMBAR
             page.update()
             return
@@ -1804,7 +1839,7 @@ def main(page: ft.Page):
             res["cadena"] = cadena
             resultado_op1_actual = res
 
-            txt_status_ops.value = f"✅ Análisis completado para '{cadena}' (n = {res['longitud_n']})"
+            txt_status_ops.value = f":) Análisis completado para '{cadena}' (n = {res['longitud_n']})"
             txt_status_ops.color = VERDE
 
             col_resultado_ops.controls = [
@@ -1833,13 +1868,13 @@ def main(page: ft.Page):
                 ),
             ]
         except Exception as err:
-            txt_status_ops.value = f"❌ Error: {err}"
+            txt_status_ops.value = f":( Error: {err}"
             txt_status_ops.color = ROJO
         page.update()
 
     def guardar_informe_operaciones(e):
         if not resultado_op1_actual:
-            txt_status_ops.value = "⚠️ No hay resultados de subcadenas para exportar."
+            txt_status_ops.value = " No hay resultados de subcadenas para exportar."
             txt_status_ops.color = AMBAR
             page.update()
             return
@@ -1850,10 +1885,10 @@ def main(page: ft.Page):
             with open(ruta_informe, "w", encoding="utf-8") as f:
                 f.write(contenido)
 
-            txt_status_ops.value = f"✅ Informe guardado en: {ruta_informe}"
+            txt_status_ops.value = f":) Informe guardado en: {ruta_informe}"
             txt_status_ops.color = VERDE
         except Exception as err:
-            txt_status_ops.value = f"❌ Error al guardar archivo: {err}"
+            txt_status_ops.value = f":( Error al guardar archivo: {err}"
             txt_status_ops.color = ROJO
         page.update()
 
@@ -1878,9 +1913,9 @@ def main(page: ft.Page):
                 bloque_fichas("Elementos", res["cadenas"], VERDE, res["total"]),
             ]
         except ValueError as err:
-            col_resultado_cerradura.controls = [ft.Text(f"❌ {err}", color=ROJO)]
+            col_resultado_cerradura.controls = [ft.Text(f":( {err}", color=ROJO)]
         except Exception as err:
-            col_resultado_cerradura.controls = [ft.Text(f"❌ Error inesperado: {err}", color=ROJO)]
+            col_resultado_cerradura.controls = [ft.Text(f":( Error inesperado: {err}", color=ROJO)]
         page.update()
 
     # =========================================================================
@@ -2060,7 +2095,8 @@ def main(page: ft.Page):
                                 "Convertir a AFN sin λ",
                                 ft.icons.TRANSFORM,
                                 on_click=ejecutar_eliminacion_lambda,
-                            )
+                            ),
+                            btn_descargar_afn_sin_lambda,
                         ),
                         txt_info_conversion_lambda,
                     ],
@@ -2090,7 +2126,7 @@ def main(page: ft.Page):
         "afd": construir_vista(
             [
                 encabezado_vista(
-                    "AFN a AFD",
+                    "Conversion AFD",
                     "Construcción por subconjuntos: cada estado del AFD agrupa estados del AFN.",
                 ),
                 tarjeta(
@@ -2322,7 +2358,6 @@ def main(page: ft.Page):
             "Archivo",
             [
                 ("Abrir autómata o lote…", ft.icons.UPLOAD_FILE, abrir_dialogo_abrir),
-                ("Guardar autómata…", ft.icons.SAVE, abrir_dialogo_guardar),
                 ("Panel de archivos", ft.icons.FOLDER_OPEN, "archivos"),
             ],
         ),
@@ -2338,7 +2373,7 @@ def main(page: ft.Page):
             "Convertir",
             [
                 ("AFN-λ a AFN", ft.icons.CLEANING_SERVICES, "lambda"),
-                ("AFN a AFD", ft.icons.MERGE_TYPE, "afd"),
+                ("Conversión AFD", ft.icons.MERGE_TYPE, "afd"),
                 ("Minimizar AFD", ft.icons.COMPRESS, "minimizar"),
             ],
         ),
